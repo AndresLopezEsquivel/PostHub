@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: posthub
+      POSTGRES_PASSWORD: posthub
+      POSTGRES_DB: posthub
+    ports:
+      - "5432:5432"
+    volumes:
+      - posthub_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posthub -d posthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://posthub:posthub@db:5432/posthub
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  posthub_pgdata:
