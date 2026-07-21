@@ -4,22 +4,80 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-PostHub is currently **design-only** — the repo contains no source code, no
-package manifest, and no build/test tooling. Everything that exists lives under
-`docs/` as three specs:
+The design docs under `docs/` are the source of truth; a backend scaffold has
+now landed on top of them. Everything is early — no route handlers, no DB
+queries, no auth yet.
+
+Design specs (still the authority for *what* to build):
 
 - `docs/screens.md` — screen inventory (data shown, actions, states, access per screen)
 - `docs/database_design.md` — PostgreSQL schema, derived directly from the screens
 - `docs/api_design.md` — REST API, derived directly from the schema
+- `docs/backend_setup.md` — how to run the backend locally via Docker Compose
 
-There are no commands to build, lint, or test yet. When implementation begins,
-update this file with the actual commands (package manager, test runner, dev
-server) rather than guessing at conventions that don't exist yet.
-
-The three docs form a deliberate chain: **screens → schema → API**. Each layer
+The three specs form a deliberate chain: **screens → schema → API**. Each layer
 justifies its decisions by pointing at the layer before it ("this column exists
 because this screen needs this query"). When extending any one of them, trace
 the change through the other two rather than editing in isolation.
+
+## Backend
+
+Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). It is a **structural
+scaffold only**: every API resource group from `api_design.md` has an empty
+router that is mounted but registers zero paths, so *every* request currently
+returns `404 { "error": { "message": "Not found" } }`. That's expected — the
+next passes add real handlers to already-mounted files, one resource at a time.
+
+Layout mirrors the spec so nothing is guessed: `src/routes/` has one
+`*.routes.ts` per resource group and `src/routes/index.ts` is the single place
+that maps the full mount tree against `api_design.md`. `src/{controllers,services,types}/`
+are placeholder dirs (README only) — populated alongside the first handler that
+needs them, not pre-stubbed. `src/app.ts` (importable app) and `src/server.ts`
+(binds the port) are split so the app can be tested without listening.
+
+Conventions baked into the scaffold:
+- **Nested routers use `Router({ mergeParams: true })`** (likes, post-scoped
+  comments/bookmarks) so a future handler can read `req.params.postId`.
+- **More-specific mounts before general ones** in `routes/index.ts`
+  (`/posts/:postId/comments` before `/posts`).
+- **Shared error envelope `{ error: { message } }`** — the only two middleware
+  with logic (`notFoundHandler`, `errorHandler`) reuse it; per-error status
+  codes and a `field` key are deferred to the handlers that produce them.
+
+### Running it
+
+Everything runs through Docker — there is **no host Node/npm** in this
+environment. From the repo root:
+
+```
+docker compose up --build          # start api (:4000) + postgres (:5432)
+docker compose up --build -d       # ... detached
+docker compose logs -f api         # watch tsx-watch hot-reload restarts
+docker compose down                # stop; add -v to also wipe the db volume
+```
+
+`backend/` is bind-mounted into the `api` container and runs `npm run dev`
+(`tsx watch`), so editing `backend/src/**` hot-reloads without a rebuild.
+Rebuild only when `package.json` or the `Dockerfile` changes. See
+`docs/backend_setup.md` for the full workflow, env vars, and troubleshooting
+(e.g. regenerating `package-lock.json` without host npm). There are no lint or
+test commands yet — add them here when that tooling lands.
+
+**Local dev credentials are intentionally throwaway and committed.** The
+`posthub`/`posthub` Postgres user/password/db in `docker-compose.yml` are
+hardcoded on purpose: they unlock only a disposable local database, so a new
+contributor gets a working stack with zero setup. This is fine *only* because
+nothing real is behind them.
+
+> **When deployment gets real:** do not carry this pattern forward. The moment
+> the stack points at a database with real data or runs in a deployed
+> environment, move credentials out of the committed `docker-compose.yml` into a
+> git-ignored root `.env` (Compose auto-loads it) referenced via
+> `${POSTGRES_PASSWORD:-posthub}`-style substitution, with a committed
+> `.env.example` documenting the keys. Never commit a real password — git
+> history is forever. Note this root Compose `.env` is a *different* scope from
+> `backend/.env` (which `dotenv` loads inside the Node process); don't conflate
+> the two.
 
 ## Architecture
 
