@@ -44,6 +44,41 @@ Conventions baked into the scaffold:
   with logic (`notFoundHandler`, `errorHandler`) reuse it; per-error status
   codes and a `field` key are deferred to the handlers that produce them.
 
+### Database layer
+
+The schema lives in `backend/migrations/*.sql` (plain SQL, transcribed from
+`docs/database_design.md`) and is applied by a small forward-only runner
+(`src/db/migrate.ts`, `npm run migrate`) that records applied files in a
+`schema_migrations` ledger. `src/db/` holds the query layer; no controllers or
+services exist yet. Conventions to preserve:
+
+- **Migrations are additive-only.** A schema change is a *new* numbered file,
+  never an edit to one already applied — the runner skips anything in the ledger,
+  so editing an applied file is a silent no-op on existing databases. There are
+  no `down` scripts; start clean with `docker compose down -v`.
+- **`migrate` is a deploy step, not a boot step.** `server.ts` must never call
+  it. It takes a `pg_advisory_lock` (safe under concurrent deploys) and honours
+  `DATABASE_SSL=true` for RDS. The production image ships the `.sql` files
+  alongside `dist/`.
+- **Parameterized queries only.** Use the helpers in `src/db/query.ts`
+  (`query` / `queryOne` / `queryMany`) with `$1, $2` placeholders — never
+  interpolate values into SQL. Multi-statement operations (create post + attach
+  categories, insert like + notification) go through `withTransaction`, which
+  BEGIN/COMMIT/ROLLBACKs and releases the client on every path.
+- **`COUNT(*)` returns a JS `number`, not a string** — because `src/db/types.ts`
+  registers a pg parser for `int8` (OID 20). That module is imported for its side
+  effect by `pool.ts` before any query runs; keep it that way, since the schema
+  derives every count (`likeCount`, `commentCount`, pagination `total`) from
+  aggregates.
+- **Row types (`src/types/db.ts`) are snake_case**, one interface per table,
+  mirroring the columns. They describe what `SELECT *` returns — *not* the
+  camelCase API shapes (`<postCard>` with `likedByMe`, `excerpt`), which are
+  built by the service that owns the query, not this layer.
+
+`npm run seed` inserts category reference data (idempotent, production-safe);
+`npm run seed:dev` wipes the domain tables and inserts sample content (refuses to
+run under `NODE_ENV=production`). See `docs/backend_setup.md` for the workflow.
+
 ### Running it
 
 Everything runs through Docker — there is **no host Node/npm** in this

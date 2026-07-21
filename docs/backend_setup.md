@@ -69,6 +69,56 @@ Expected: `HTTP/1.1 404 Not Found` with body `{"error":{"message":"Not found"}}`
 
 ---
 
+## Database: migrations and seeds
+
+The schema is not applied by starting the stack. `docker compose up` gives you an **empty**
+Postgres; you then run the migration and seed scripts explicitly. They live in `backend/` and
+run inside the `api` container (which already has the connection string and dependencies):
+
+```
+docker compose exec api npm run migrate    # create/upgrade the schema
+docker compose exec api npm run seed        # seed categories (reference data)
+docker compose exec api npm run seed:dev    # + dev sample users/posts/… (destructive)
+```
+
+| Command | What it does | Safe to re-run? |
+| --- | --- | --- |
+| `npm run migrate` | Applies every `backend/migrations/*.sql` not yet applied, in order, each in its own transaction. Records applied files in a `schema_migrations` table. | Yes — already-applied files are skipped. |
+| `npm run seed` | Inserts the category lookup rows (`ON CONFLICT DO NOTHING`). | Yes — idempotent, never duplicates. |
+| `npm run seed:dev` | **Truncates the domain tables** and inserts a known graph of users, posts, comments, likes, bookmarks, and follows. Refuses to run when `NODE_ENV=production`. | Yes, but it wipes existing content first. |
+
+Typical first run against a fresh database:
+
+```
+docker compose up --build -d
+docker compose exec api npm run migrate
+docker compose exec api npm run seed:dev     # seeds categories too, so seed is optional here
+```
+
+Migrations are **forward-only** — there are no `down` scripts. To start completely clean, drop
+the volume and re-migrate:
+
+```
+docker compose down -v
+docker compose up --build -d
+docker compose exec api npm run migrate
+```
+
+Adding a schema change later means adding a **new** numbered file under `backend/migrations/`
+(e.g. `011_add_something.sql`) and re-running `npm run migrate` — never editing a file that has
+already been applied.
+
+Seeded dev users all share the password `password123` (throwaway, local only).
+
+> **Note on production / RDS:** `npm run migrate` is designed to run as a one-off **deploy step**
+> (an ECS run-task or release command), not at application boot — a web process that migrated on
+> start would migrate once per replica. It takes an advisory lock so two concurrent deploys can't
+> race, and honours TLS via `DATABASE_SSL=true` for managed databases that require it. The
+> production image ships the `.sql` files alongside the compiled `dist/` so the runner has
+> something to apply.
+
+---
+
 ## Development workflow
 
 `backend/` is bind-mounted into the `api` container, and the container runs
