@@ -95,11 +95,12 @@ docker compose exec api npm run migrate
 docker compose exec api npm run seed:dev     # seeds categories too, so seed is optional here
 ```
 
-Migrations are **forward-only** — there are no `down` scripts. To start completely clean, drop
-the volume and re-migrate:
+Migrations are **forward-only** — migrations only move the schema forward; you can't roll one back. To start completely clean, drop the volume and re-migrate:
 
 ```
 docker compose down -v
+# -v removes named volumes declared in the "volumes" section of the Compose file
+# and anonymous volumes attached to containers
 docker compose up --build -d
 docker compose exec api npm run migrate
 ```
@@ -111,8 +112,9 @@ already been applied.
 Seeded dev users all share the password `password123` (throwaway, local only).
 
 > **Note on production / RDS:** `npm run migrate` is designed to run as a one-off **deploy step**
-> (an ECS run-task or release command), not at application boot — a web process that migrated on
-> start would migrate once per replica. It takes an advisory lock so two concurrent deploys can't
+> (an ECS run-task or release command), not at application boot —
+> run migrations as a separate deploy step, not automatically when the app starts
+> It takes an advisory lock so two concurrent deploys can't
 > race, and honours TLS via `DATABASE_SSL=true` for managed databases that require it. The
 > production image ships the `.sql` files alongside the compiled `dist/` so the runner has
 > something to apply.

@@ -79,6 +79,41 @@ services exist yet. Conventions to preserve:
 `npm run seed:dev` wipes the domain tables and inserts sample content (refuses to
 run under `NODE_ENV=production`). See `docs/backend_setup.md` for the workflow.
 
+### Controller implementation order
+
+Controllers are added **incrementally, one resource group per pass** — not all at
+once. The order below is deliberate: build the primitives that other handlers
+assert against before the handlers that assert against them. The spine is 1→2→3;
+everything from 4 on hangs off the `<postCard>` shape and the ownership pattern
+those establish.
+
+1. **Categories** (+ `GET /api/health`) — the walking skeleton. Read-only, no
+   auth, no ownership, no pagination: proves the DB → service → controller →
+   router → error-envelope pipeline end to end before any hard semantics. `health`
+   just wraps the existing `checkDatabase()`; `createPost` needs category ids anyway.
+2. **Auth** (register / login / logout / session) — the real foundation. Builds
+   password verification, the `connect-pg-simple` session store, and the
+   **`requireAuth` middleware** every later `auth` endpoint imports. Nothing gated
+   is testable until this lands.
+3. **Posts** (CRUD) — the core noun. Establishes the `<postCard>` shape, the
+   pagination envelope, and the **ownership → `403`** pattern every later write
+   reuses. Leave `likeCount`/`likedByMe`/`bookmarkedByMe` at their empty values for
+   now; step 4 fills them in.
+4. **Likes + Bookmarks** — idempotent `PUT`/`DELETE` toggles that retrofit the
+   `postCard` fields step 3 stubbed. Small, and best done while the card code is fresh.
+5. **Comments** — nested + top-level; completes `commentCount` and reuses the
+   step-3 owner guard.
+6. **Users + follows** — profiles with derived counts, and the follow toggle.
+   Follows are the prerequisite for the feed.
+7. **Feed** — trivial once follows exist: `listPosts` restricted to followees,
+   same card renderer and envelope.
+8. **Notifications** — last of the domain, because rows are produced as *side
+   effects* of likes, comments, and follows (steps 4–6). Wiring the inserts into
+   those handlers requires them to already exist.
+9. **Uploads** (`presign`) — orthogonal (S3-dependent, not DB-dependent).
+   `imageKey`/`avatar_key` are nullable, so posts and profiles work without it;
+   land it whenever AWS credentials are ready.
+
 ### Running it
 
 Everything runs through Docker — there is **no host Node/npm** in this
