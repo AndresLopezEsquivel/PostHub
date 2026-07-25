@@ -1,0 +1,65 @@
+import { query, queryOne } from '../../src/db/query';
+
+// Test-database helpers for the integration suite. resetDb() gives each test a
+// clean slate; the seed* helpers insert just the rows a test needs and return
+// their ids. They mirror the shapes in src/db/seed-dev.ts, kept deliberately
+// small — richer fixtures get added by the pass that first needs them.
+
+// Every domain table, in an order that doesn't matter because CASCADE clears
+// FK-dependent rows. categories is intentionally absent: it's reference data,
+// re-seeded explicitly by seedCategories() when a test needs it.
+const DOMAIN_TABLES = [
+  'users',
+  'posts',
+  'comments',
+  'post_likes',
+  'bookmarks',
+  'follows',
+  'notifications',
+  'post_categories',
+];
+
+// RESTART IDENTITY resets the serial sequences so ids are predictable per test.
+export async function resetDb(): Promise<void> {
+  await query(
+    `TRUNCATE ${DOMAIN_TABLES.join(', ')} RESTART IDENTITY CASCADE`,
+  );
+}
+
+export async function seedCategories(): Promise<void> {
+  const categories: ReadonlyArray<[string, string]> = [
+    ['Philosophy', 'philosophy'],
+    ['Fiction', 'fiction'],
+    ['Technology', 'technology'],
+  ];
+  for (const [name, slug] of categories) {
+    await query(
+      `INSERT INTO categories (name, slug) VALUES ($1, $2)
+       ON CONFLICT (slug) DO NOTHING`,
+      [name, slug],
+    );
+  }
+}
+
+export async function seedUser(
+  overrides: Partial<{
+    username: string;
+    email: string;
+    bio: string | null;
+    passwordHash: string;
+  }> = {},
+): Promise<number> {
+  const user = {
+    username: 'tester',
+    email: 'tester@example.com',
+    bio: null as string | null,
+    passwordHash: 'not-a-real-hash',
+    ...overrides,
+  };
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO users (username, email, password_hash, bio)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [user.username, user.email, user.passwordHash, user.bio],
+  );
+  return row!.id;
+}

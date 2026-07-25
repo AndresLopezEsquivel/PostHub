@@ -130,8 +130,8 @@ docker compose down                # stop; add -v to also wipe the db volume
 (`tsx watch`), so editing `backend/src/**` hot-reloads without a rebuild.
 Rebuild only when `package.json` or the `Dockerfile` changes. See
 `docs/backend_setup.md` for the full workflow, env vars, and troubleshooting
-(e.g. regenerating `package-lock.json` without host npm). There are no lint or
-test commands yet — add them here when that tooling lands.
+(e.g. regenerating `package-lock.json` without host npm). No lint command yet —
+add it here when that tooling lands.
 
 **Local dev credentials are intentionally throwaway and committed.** The
 `posthub`/`posthub` Postgres user/password/db in `docker-compose.yml` are
@@ -148,6 +148,41 @@ nothing real is behind them.
 > history is forever. Note this root Compose `.env` is a *different* scope from
 > `backend/.env` (which `dotenv` loads inside the Node process); don't conflate
 > the two.
+
+### Testing
+
+Vitest, in two projects (config in `backend/vitest.config.ts`), added ahead of
+the controllers so each pass in the order above lands with its tests:
+
+- **unit** — co-located `src/**/*.test.ts`, no database. Mock the `src/db/query`
+  helpers (or spy on `pool`) and assert pure logic and row → API-shape mapping.
+  Fast; runs in parallel.
+- **integration** — `backend/tests/integration/**`, the real `app` (from
+  `src/app.ts`, which is why it's split from `server.ts`) driven with `supertest`
+  against a dedicated **`posthub_test`** database. `tests/setup.ts` truncates the
+  domain tables before each test; files run serially (one shared database).
+
+```
+docker compose exec api npm run test:setup   # once: create + migrate posthub_test
+docker compose exec api npm test             # both layers
+docker compose exec api npm run test:unit    # / test:integration / test:watch
+```
+
+Conventions to preserve:
+- **Unit-first, then integration, per pass.** Write unit tests for the
+  logic-bearing parts (mapping, pagination, ownership, validation), then prove the
+  endpoint end to end with an integration test for each documented status code.
+  For thin pass-throughs the integration test is the one that matters — don't pad
+  with unit tests that only assert "the right SQL string was passed."
+- **Tests never touch the dev database.** The `test` scripts pin `DATABASE_URL`
+  to `posthub_test` and `tests/setup.ts` refuses any database not ending in
+  `_test`. Keep both guards.
+- **`migrate.ts` exports `runMigrations(pool?)`** so the harness can migrate
+  `posthub_test`; its CLI path is guarded by `require.main === module`. Don't
+  reintroduce top-level migration calls — importing the module must stay
+  side-effect-free.
+- **Co-located `*.test.ts` are excluded from `tsc`** (`tsconfig.json`) so they
+  never compile into `dist/`.
 
 ## Architecture
 
