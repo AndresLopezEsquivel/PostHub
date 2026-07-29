@@ -69,6 +69,99 @@ Expected: `HTTP/1.1 404 Not Found` with body `{"error":{"message":"Not found"}}`
 
 ---
 
+## Database: migrations and seeds
+
+The schema is not applied by starting the stack. `docker compose up` gives you an **empty**
+Postgres; you then run the migration and seed scripts explicitly. They live in `backend/` and
+run inside the `api` container (which already has the connection string and dependencies):
+
+```
+docker compose exec api npm run migrate    # create/upgrade the schema
+docker compose exec api npm run seed        # seed categories (reference data)
+docker compose exec api npm run seed:dev    # + dev sample users/posts/… (destructive)
+```
+
+| Command | What it does | Safe to re-run? |
+| --- | --- | --- |
+| `npm run migrate` | Applies every `backend/migrations/*.sql` not yet applied, in order, each in its own transaction. Records applied files in a `schema_migrations` table. | Yes — already-applied files are skipped. |
+| `npm run seed` | Inserts the category lookup rows (`ON CONFLICT DO NOTHING`). | Yes — idempotent, never duplicates. |
+| `npm run seed:dev` | **Truncates the domain tables** and inserts a known graph of users, posts, comments, likes, bookmarks, and follows. Refuses to run when `NODE_ENV=production`. | Yes, but it wipes existing content first. |
+
+Typical first run against a fresh database:
+
+```
+docker compose up --build -d
+docker compose exec api npm run migrate
+docker compose exec api npm run seed:dev     # seeds categories too, so seed is optional here
+```
+
+Migrations are **forward-only** — migrations only move the schema forward; you can't roll one back. To start completely clean, drop the volume and re-migrate:
+
+```
+docker compose down -v
+# -v removes named volumes declared in the "volumes" section of the Compose file
+# and anonymous volumes attached to containers
+docker compose up --build -d
+docker compose exec api npm run migrate
+```
+
+Adding a schema change later means adding a **new** numbered file under `backend/migrations/`
+(e.g. `011_add_something.sql`) and re-running `npm run migrate` — never editing a file that has
+already been applied.
+
+Seeded dev users all share the password `password123` (throwaway, local only).
+
+> **Note on production / RDS:** `npm run migrate` is designed to run as a one-off **deploy step**
+> (an ECS run-task or release command), not at application boot —
+> run migrations as a separate deploy step, not automatically when the app starts
+> It takes an advisory lock so two concurrent deploys can't
+> race, and honours TLS via `DATABASE_SSL=true` for managed databases that require it. The
+> production image ships the `.sql` files alongside the compiled `dist/` so the runner has
+> something to apply.
+
+---
+
+## Running the tests
+
+The suite uses [Vitest](https://vitest.dev/) and runs in two layers:
+
+- **unit** — fast, no database. Collaborators are mocked; co-located next to the
+  code as `src/**/*.test.ts`.
+- **integration** — the real Express app driven with `supertest` against a
+  dedicated **`posthub_test`** database (never the dev database). Lives under
+  `backend/tests/integration/`.
+
+One-time, create and migrate the test database (idempotent — safe to re-run, and
+re-run it after adding a migration):
+
+```
+docker compose exec api npm run test:setup
+```
+
+Then run the tests:
+
+```
+docker compose exec api npm test              # both layers
+docker compose exec api npm run test:unit         # unit only (no DB needed)
+docker compose exec api npm run test:integration  # integration only
+docker compose exec api npm run test:watch        # watch mode during a pass
+```
+
+The `test` scripts hard-code `DATABASE_URL` to `posthub_test`, and the
+integration setup refuses to run against any database whose name doesn't end in
+`_test` — so tests can never truncate your dev data. Integration files run
+serially because they share the one test database.
+
+> **After changing `package.json`** (e.g. adding a test dependency) the image
+> must rebuild *and* the container's `node_modules` volume must be renewed, or
+> the new binary won't be visible:
+>
+> ```
+> docker compose up --build -d --renew-anon-volumes
+> ```
+
+---
+
 ## Development workflow
 
 `backend/` is bind-mounted into the `api` container, and the container runs

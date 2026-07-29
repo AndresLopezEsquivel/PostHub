@@ -7,18 +7,31 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "migrate": "tsx src/db/migrate.ts",
+    "seed": "tsx src/db/seed.ts",
+    "seed:dev": "tsx src/db/seed-dev.ts",
+    "test:setup": "tsx src/db/test-setup-cli.ts",
+    "test": "DATABASE_URL=postgresql://posthub:posthub@db:5432/posthub_test vitest run",
+    "test:watch": "DATABASE_URL=postgresql://posthub:posthub@db:5432/posthub_test vitest",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "DATABASE_URL=postgresql://posthub:posthub@db:5432/posthub_test vitest run --project integration"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "express": "^5.0.1",
     "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.0",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.11.10",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.0"
   }
 }
