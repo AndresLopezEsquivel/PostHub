@@ -121,6 +121,47 @@ Seeded dev users all share the password `password123` (throwaway, local only).
 
 ---
 
+## Running the tests
+
+The suite uses [Vitest](https://vitest.dev/) and runs in two layers:
+
+- **unit** — fast, no database. Collaborators are mocked; co-located next to the
+  code as `src/**/*.test.ts`.
+- **integration** — the real Express app driven with `supertest` against a
+  dedicated **`posthub_test`** database (never the dev database). Lives under
+  `backend/tests/integration/`.
+
+One-time, create and migrate the test database (idempotent — safe to re-run, and
+re-run it after adding a migration):
+
+```
+docker compose exec api npm run test:setup
+```
+
+Then run the tests:
+
+```
+docker compose exec api npm test              # both layers
+docker compose exec api npm run test:unit         # unit only (no DB needed)
+docker compose exec api npm run test:integration  # integration only
+docker compose exec api npm run test:watch        # watch mode during a pass
+```
+
+The `test` scripts hard-code `DATABASE_URL` to `posthub_test`, and the
+integration setup refuses to run against any database whose name doesn't end in
+`_test` — so tests can never truncate your dev data. Integration files run
+serially because they share the one test database.
+
+> **After changing `package.json`** (e.g. adding a test dependency) the image
+> must rebuild *and* the container's `node_modules` volume must be renewed, or
+> the new binary won't be visible:
+>
+> ```
+> docker compose up --build -d --renew-anon-volumes
+> ```
+
+---
+
 ## Development workflow
 
 `backend/` is bind-mounted into the `api` container, and the container runs

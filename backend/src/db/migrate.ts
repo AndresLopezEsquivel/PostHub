@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Pool } from 'pg';
 import { pool, closePool } from './pool';
 
 // Forward-only SQL migration runner. Applies every backend/migrations/*.sql
@@ -22,8 +23,12 @@ const MIGRATION_LOCK_KEY = 4021775; // "posthub migrations", any constant works
 // too (dist/db → ../../migrations), provided the image ships the SQL files.
 const MIGRATIONS_DIR = join(__dirname, '../../migrations');
 
-async function migrate(): Promise<void> {
-  await pool.query(`
+// Apply all pending migrations against `db`. Exported (rather than run inline)
+// so a caller can point it at a different database than the shared process pool
+// — the test harness migrates posthub_test by passing a pool bound to it. The
+// CLI path below calls it with no argument, so it defaults to the shared pool.
+export async function runMigrations(db: Pool = pool): Promise<void> {
+  await db.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       filename   text        PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
@@ -32,11 +37,11 @@ async function migrate(): Promise<void> {
 
   // Serialize with any other runner before reading the ledger, so the "what's
   // already applied?" check and the writes that follow are one critical section.
-  await pool.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
+  await db.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
   try {
     const applied = new Set(
       (
-        await pool.query<{ filename: string }>(
+        await db.query<{ filename: string }>(
           'SELECT filename FROM schema_migrations',
         )
       ).rows.map((r) => r.filename),
@@ -54,7 +59,7 @@ async function migrate(): Promise<void> {
 
     for (const filename of pending) {
       const sql = readFileSync(join(MIGRATIONS_DIR, filename), 'utf8');
-      const client = await pool.connect();
+      const client = await db.connect();
       try {
         // One transaction per file: a failing migration rolls back cleanly and
         // halts the run, leaving every earlier file committed and this one not
@@ -81,14 +86,19 @@ async function migrate(): Promise<void> {
 
     console.log(`Done — applied ${pending.length} migration(s).`);
   } finally {
-    await pool.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]);
+    await db.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]);
   }
 }
 
-migrate()
-  .then(() => closePool())
-  .catch(async (err) => {
-    console.error(err);
-    await closePool();
-    process.exit(1);
-  });
+// CLI entrypoint. Guarded by require.main so that importing this module (the
+// test-setup helper does, to reuse runMigrations) neither migrates nor closes
+// the shared pool — only running it directly does.
+if (require.main === module) {
+  runMigrations()
+    .then(() => closePool())
+    .catch(async (err) => {
+      console.error(err);
+      await closePool();
+      process.exit(1);
+    });
+}
