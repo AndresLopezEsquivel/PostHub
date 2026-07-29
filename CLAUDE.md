@@ -20,6 +20,10 @@ justifies its decisions by pointing at the layer before it ("this column exists
 because this screen needs this query"). When extending any one of them, trace
 the change through the other two rather than editing in isolation.
 
+## Commits
+
+Write commit messages in conventional commit format: `type(scope): description`.
+
 ## Backend
 
 Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). It is a **structural
