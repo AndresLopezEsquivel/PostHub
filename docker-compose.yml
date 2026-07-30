@@ -29,6 +29,12 @@ services:
       NODE_ENV: development
       PORT: 4000
       DATABASE_URL: postgresql://posthub:posthub@db:5432/posthub
+      # Throwaway local-dev secret, committed on purpose — same rationale as the
+      # posthub/posthub DB creds above: it signs cookies for a disposable local
+      # session store and unlocks nothing real. Do NOT carry this into a deployed
+      # environment; move it to a git-ignored .env when deployment gets real
+      # (see CLAUDE.md).
+      SESSION_SECRET: dev-insecure-secret
     depends_on:
       db:
         condition: service_healthy
