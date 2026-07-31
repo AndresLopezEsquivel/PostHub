@@ -173,7 +173,7 @@ POST /api/posts
 
 GET /api/posts/42
 → (no body)
-← 200 { …<postCard>, "content": "Camus opens with…" }
+← 200 { …<postCard>, "content": "Camus opens with…", "imageKey": null, "updatedAt": null }
 ← 404 { "error": { "message": "Post not found" } }
 
 PATCH /api/posts/42
@@ -187,7 +187,10 @@ DELETE /api/posts/42
 ```
 
 `getPost` returns the same shape as `<postCard>` plus the full `content`; the list
-endpoint sends `excerpt` only.
+endpoint sends `excerpt` only. Detail also carries `imageKey` and `updatedAt` (both
+absent from the list card): the Edit-post screen pre-fills from the current image
+`key`, and Post detail shows an "edited" timestamp. `updatedAt` is `null` until the
+post is first edited.
 
 `createPost` takes `categoryIds`, not category names — the client already holds the
 list from `GET /api/categories`.

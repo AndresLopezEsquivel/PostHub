@@ -63,3 +63,35 @@ export async function seedUser(
   );
   return row!.id;
 }
+
+export async function seedPost(
+  input: {
+    authorId: number;
+    title?: string;
+    content?: string;
+    imageKey?: string | null;
+    categoryIds?: number[];
+  },
+): Promise<number> {
+  const post = {
+    title: 'Sample post',
+    content: 'Sample content for the post body.',
+    imageKey: null as string | null,
+    categoryIds: [] as number[],
+    ...input,
+  };
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO posts (author_id, title, content, image_key)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [post.authorId, post.title, post.content, post.imageKey],
+  );
+  const postId = row!.id;
+  for (const categoryId of post.categoryIds) {
+    await query(
+      `INSERT INTO post_categories (post_id, category_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [postId, categoryId],
+    );
+  }
+  return postId;
+}
