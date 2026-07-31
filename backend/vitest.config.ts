@@ -8,7 +8,10 @@ import { defineConfig } from 'vitest/config';
 //  - integration: the real Express app driven with supertest against the
 //    posthub_test database. A setup file resets the schema between tests, and
 //    files run serially (one shared database — parallel suites would race each
-//    other's TRUNCATE).
+//    other's TRUNCATE). Serialization is enforced with a single fork
+//    (poolOptions.forks.singleFork): all integration files share one worker
+//    process and run one after another. `fileParallelism: false` alone is not
+//    honored when set inside a projects[] entry, so it can't be relied on here.
 //
 // Run everything with `npm test`; a single layer with `npm run test:unit` /
 // `npm run test:integration`.
@@ -30,7 +33,10 @@ export default defineConfig({
           include: ['tests/integration/**/*.test.ts'],
           environment: 'node',
           setupFiles: ['tests/setup.ts'],
-          fileParallelism: false,
+          pool: 'forks',
+          poolOptions: {
+            forks: { singleFork: true },
+          },
         },
       },
     ],
