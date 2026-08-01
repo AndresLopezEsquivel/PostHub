@@ -239,7 +239,8 @@ DELETE /api/posts/42/like
 ```
 
 Returning the updated count lets the client render the new state without refetching
-the post.
+the post. Liking or unliking a post that doesn't exist returns
+`404 { "error": { "message": "Post not found" } }`.
 
 ---
 
@@ -299,7 +300,8 @@ GET /api/bookmarks?page=1&limit=20
 ```
 
 No `bookmarkCount` is returned — bookmarks are private, so a public tally would leak
-information the UI never shows.
+information the UI never shows. Bookmarking or unbookmarking a post that doesn't
+exist returns `404 { "error": { "message": "Post not found" } }`.
 
 `GET /api/bookmarks` is scoped to the session user by definition. There is no path
 for reading anyone else's.

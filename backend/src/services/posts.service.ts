@@ -1,5 +1,6 @@
 import { PoolClient } from 'pg';
 import { query, queryOne, queryMany, withTransaction } from '../db/query';
+import { isForeignKeyViolation } from '../db/pgErrors';
 import { badRequest, forbidden, notFound } from '../errors/httpError';
 
 // Posts data access + validation + row→API mapping. Like the other services it
@@ -53,7 +54,15 @@ export interface PostList {
 // One SELECT feeds list, detail, and the create/update responses, so the card
 // shape has a single source of truth. Categories are aggregated as a JSON array
 // in-SQL (node-postgres parses json to a JS array); the author is joined in.
-const CARD_SELECT = `
+//
+// `viewerParam` is the SQL placeholder (`$1`, `$3`, …) that binds the *viewing*
+// user's id, used to derive likedByMe/bookmarkedByMe. It's a placeholder token
+// the caller owns — never user input — so interpolating it is injection-safe
+// (the value still binds through pg). A null viewer makes `user_id = NULL` never
+// match, so both flags come back `false` for anonymous readers automatically.
+// `int8` COUNT → JS number and `bool` → JS boolean via the pg parsers in db/types.
+function cardSelect(viewerParam: string): string {
+  return `
   SELECT p.id, p.title, p.content, p.image_key, p.created_at, p.updated_at,
          u.username AS author_username, u.avatar_key AS author_avatar_key,
          COALESCE((
@@ -61,10 +70,16 @@ const CARD_SELECT = `
            FROM post_categories pc
            JOIN categories c ON c.id = pc.category_id
            WHERE pc.post_id = p.id
-         ), '[]') AS categories
+         ), '[]') AS categories,
+         (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS like_count,
+         EXISTS (SELECT 1 FROM post_likes pl
+                  WHERE pl.post_id = p.id AND pl.user_id = ${viewerParam}) AS liked_by_me,
+         EXISTS (SELECT 1 FROM bookmarks bm
+                  WHERE bm.post_id = p.id AND bm.user_id = ${viewerParam}) AS bookmarked_by_me
   FROM posts p
   JOIN users u ON u.id = p.author_id
 `;
+}
 
 // The row shape the card SELECT returns — not a table row, so it lives here
 // rather than in types/db.ts (which mirrors tables one-for-one).
@@ -78,6 +93,9 @@ interface PostCardRow {
   author_username: string;
   author_avatar_key: string | null;
   categories: CategoryTag[];
+  like_count: number;
+  liked_by_me: boolean;
+  bookmarked_by_me: boolean;
 }
 
 // --- Pure mappers (unit-tested) -----------------------------------------
@@ -111,12 +129,12 @@ export function toPostCard(row: PostCardRow): PostCard {
       avatarUrl: avatarKeyToUrl(row.author_avatar_key),
     },
     categories: row.categories,
-    // Stubbed this pass; steps 4 (likes) and 5 (comments) fill these in using
-    // the same serializer. `false` matches the documented anonymous defaults.
-    likeCount: 0,
+    likeCount: row.like_count,
+    // commentCount is still stubbed — step 5 (comments) fills it in via the same
+    // serializer. The like/bookmark fields are now real (step 4).
     commentCount: 0,
-    likedByMe: false,
-    bookmarkedByMe: false,
+    likedByMe: row.liked_by_me,
+    bookmarkedByMe: row.bookmarked_by_me,
     createdAt: row.created_at,
   };
 }
@@ -206,18 +224,20 @@ function validateImageKey(value: unknown): string | null {
   return key;
 }
 
-function isForeignKeyViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    (err as { code?: unknown }).code === '23503'
-  );
-}
-
 // --- Queries -------------------------------------------------------------
 
-async function fetchPostRow(postId: number): Promise<PostCardRow | null> {
-  return queryOne<PostCardRow>(`${CARD_SELECT} WHERE p.id = $1`, [postId]);
+async function fetchPostRow(
+  postId: number,
+  viewerId: number | null,
+): Promise<PostCardRow | null> {
+  return queryOne<PostCardRow>(`${cardSelect('$1')} WHERE p.id = $2`, [viewerId, postId]);
+}
+
+// Likes and bookmarks hang off a post; a toggle on a missing post is a 404, the
+// same as the read/write handlers. Exported for the like/bookmark services to reuse.
+export async function assertPostExists(postId: number): Promise<void> {
+  const row = await queryOne<{ id: number }>('SELECT id FROM posts WHERE id = $1', [postId]);
+  if (!row) throw notFound('Post not found');
 }
 
 async function insertPostCategories(
@@ -255,7 +275,10 @@ export interface ListParams {
   limit?: unknown;
 }
 
-export async function listPosts(params: ListParams): Promise<PostList> {
+export async function listPosts(
+  params: ListParams,
+  viewerId: number | null,
+): Promise<PostList> {
   const { page, limit } = normalizePagination(params.page, params.limit);
   const sort = params.sort === 'likes' ? 'likes' : 'newest';
 
@@ -290,17 +313,51 @@ export async function listPosts(params: ListParams): Promise<PostList> {
   );
   const total = totalRow?.total ?? 0;
 
+  // The `where`/`orderBy` placeholders index into `values` ($1..$n); the viewer
+  // and pagination bind *after* them so the same `where` also serves the
+  // viewer-free total query above.
   const offset = (page - 1) * limit;
+  const viewerParam = `$${values.length + 1}`;
   const rows = await queryMany<PostCardRow>(
-    `${CARD_SELECT} ${where} ${orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-    [...values, limit, offset],
+    `${cardSelect(viewerParam)} ${where} ${orderBy} LIMIT $${values.length + 2} OFFSET $${values.length + 3}`,
+    [...values, viewerId, limit, offset],
   );
 
   return { data: rows.map(toPostCard), page, limit, total };
 }
 
-export async function getPost(postId: number): Promise<PostDetail> {
-  const row = await fetchPostRow(postId);
+// The session user's saved posts, newest-saved first. Reuses the card machinery;
+// the viewer is the owner, so bookmarkedByMe is true for every card here.
+export async function listBookmarks(
+  userId: number,
+  params: { page?: unknown; limit?: unknown },
+): Promise<PostList> {
+  const { page, limit } = normalizePagination(params.page, params.limit);
+
+  const totalRow = await queryOne<{ total: number }>(
+    'SELECT COUNT(*)::int AS total FROM bookmarks WHERE user_id = $1',
+    [userId],
+  );
+  const total = totalRow?.total ?? 0;
+
+  const offset = (page - 1) * limit;
+  const rows = await queryMany<PostCardRow>(
+    `${cardSelect('$1')}
+       JOIN bookmarks bkm ON bkm.post_id = p.id
+      WHERE bkm.user_id = $1
+      ORDER BY bkm.created_at DESC, p.id DESC
+      LIMIT $2 OFFSET $3`,
+    [userId, limit, offset],
+  );
+
+  return { data: rows.map(toPostCard), page, limit, total };
+}
+
+export async function getPost(
+  postId: number,
+  viewerId: number | null,
+): Promise<PostDetail> {
+  const row = await fetchPostRow(postId, viewerId);
   if (!row) throw notFound('Post not found');
   return toPostDetail(row);
 }
@@ -337,8 +394,9 @@ export async function createPost(
     throw err;
   });
 
-  // Just committed, so it exists — re-read through the shared card query.
-  const row = await fetchPostRow(postId);
+  // Just committed, so it exists — re-read through the shared card query. The
+  // author is the viewer here, so likedByMe/bookmarkedByMe reflect their state.
+  const row = await fetchPostRow(postId, authorId);
   return toPostCard(row!);
 }
 
@@ -396,7 +454,7 @@ export async function updatePost(
     throw err;
   });
 
-  const row = await fetchPostRow(postId);
+  const row = await fetchPostRow(postId, userId);
   return toPostCard(row!);
 }
 
