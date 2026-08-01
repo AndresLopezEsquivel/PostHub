@@ -353,6 +353,34 @@ export async function listBookmarks(
   return { data: rows.map(toPostCard), page, limit, total };
 }
 
+// The posts a given user authored, newest-first — the profile's "posts" tab.
+// Reuses the card machinery like listBookmarks, but the author and the viewer are
+// distinct people, so they bind to separate params ($1 author, $2 viewer).
+export async function listPostsByAuthor(
+  authorId: number,
+  params: { page?: unknown; limit?: unknown },
+  viewerId: number | null,
+): Promise<PostList> {
+  const { page, limit } = normalizePagination(params.page, params.limit);
+
+  const totalRow = await queryOne<{ total: number }>(
+    'SELECT COUNT(*)::int AS total FROM posts WHERE author_id = $1',
+    [authorId],
+  );
+  const total = totalRow?.total ?? 0;
+
+  const offset = (page - 1) * limit;
+  const rows = await queryMany<PostCardRow>(
+    `${cardSelect('$2')}
+      WHERE p.author_id = $1
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT $3 OFFSET $4`,
+    [authorId, viewerId, limit, offset],
+  );
+
+  return { data: rows.map(toPostCard), page, limit, total };
+}
+
 export async function getPost(
   postId: number,
   viewerId: number | null,

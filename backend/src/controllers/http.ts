@@ -24,6 +24,13 @@ export function parseCommentId(req: Request): number {
   return id;
 }
 
+// The :username segment addresses the user routes. It's always a single path
+// segment (never an array), but Express types it as string | string[]; coerce to
+// a plain string. A missing user is a 404 the service raises when it resolves it.
+export function parseUsername(req: Request): string {
+  return String(req.params.username);
+}
+
 // requireAuth guards the write routes, so userId is set; assert it for the type
 // and fail closed if that middleware is ever dropped from a route.
 export function requireUserId(req: Request): number {

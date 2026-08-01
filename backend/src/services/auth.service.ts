@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { queryOne } from '../db/query';
+import { isUniqueViolation } from '../db/pgErrors';
 import { UserRow } from '../types/db';
 import { badRequest, conflict } from '../errors/httpError';
 
@@ -68,13 +69,12 @@ function validateRegistration(input: RegisterInput): ValidRegistration {
   return { username, email, password };
 }
 
-// Narrow a caught unknown to a Postgres unique-violation with a constraint name.
-function isUniqueViolation(err: unknown): err is { code: string; constraint?: string } {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    (err as { code?: unknown }).code === '23505'
-  );
+// Read the constraint name off a caught pg error, to attribute a unique-violation
+// to the right field (username vs. email).
+function constraintName(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null
+    ? (err as { constraint?: string }).constraint
+    : undefined;
 }
 
 // Create the user and return the stored row. Uniqueness is enforced by the DB
@@ -96,7 +96,7 @@ export async function registerUser(input: RegisterInput): Promise<UserRow> {
     return row!;
   } catch (err) {
     if (isUniqueViolation(err)) {
-      if (err.constraint === 'users_email_key') {
+      if (constraintName(err) === 'users_email_key') {
         throw conflict('Email already registered', 'email');
       }
       // Default to username: the only other UNIQUE constraint on the table.

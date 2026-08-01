@@ -114,6 +114,19 @@ export async function seedBookmark(input: { userId: number; postId: number }): P
   );
 }
 
+// Arrange a follow edge directly. Idempotent, mirroring the toggle semantics; the
+// -er/-ee direction is fixed (follower does the following, followee is followed).
+export async function seedFollow(input: {
+  followerId: number;
+  followeeId: number;
+}): Promise<void> {
+  await query(
+    `INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [input.followerId, input.followeeId],
+  );
+}
+
 export async function seedComment(
   input: { postId: number; authorId: number; content?: string },
 ): Promise<number> {

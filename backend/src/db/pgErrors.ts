@@ -15,3 +15,8 @@ function pgCode(err: unknown): string | undefined {
 export function isForeignKeyViolation(err: unknown): boolean {
   return pgCode(err) === '23503';
 }
+
+// 23505 unique_violation — e.g. a duplicate username or email on insert/update.
+export function isUniqueViolation(err: unknown): boolean {
+  return pgCode(err) === '23505';
+}

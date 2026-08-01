@@ -348,7 +348,7 @@ GET /api/users/andres/posts?page=1&limit=20
 ← 200 { "data": [ <postCard>, … ], "page": 1, "limit": 20, "total": 12 }
 
 GET /api/users/andres/followers?page=1&limit=20
-← 200 { "data": [ { …<user>, "bio": "Reading and building." }, … ],
+← 200 { "data": [ { …<user>, "bio": "Reading and building.", "followedByMe": false }, … ],
         "page": 1, "limit": 20, "total": 34 }
 
 PUT /api/users/andres/follow
@@ -362,7 +362,13 @@ DELETE /api/users/andres/follow
 ```
 
 `followedByMe` is the profile's viewer-relative field, and is `false` for anonymous
-callers. `listFollowing` mirrors `listFollowers` exactly.
+callers. Each row of `listFollowers`/`listFollowing` carries its own `followedByMe`
+too, so the list screen can render a per-row follow button without a second request;
+`listFollowing` mirrors `listFollowers` exactly.
+
+A missing `:username` is a uniform `404 { "error": { "message": "User not found" } }`
+across every user-addressed endpoint — the profile, the `/posts`, `/followers`, and
+`/following` sub-lists, and the `follow`/`unfollow` toggle.
 
 `PATCH /api/users/me` **rejects `username` in the body with `400`** — it is not
 silently ignored. Usernames are immutable (see Design decisions), and a silent drop
