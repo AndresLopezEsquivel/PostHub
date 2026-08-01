@@ -40,6 +40,7 @@ const sampleCardRow = {
   author_avatar_key: null as string | null,
   categories: [{ name: 'Philosophy', slug: 'philosophy' }],
   like_count: 0,
+  comment_count: 0,
   liked_by_me: false,
   bookmarked_by_me: false,
 };
@@ -93,7 +94,7 @@ describe('normalizePagination', () => {
 });
 
 describe('toPostCard / toPostDetail', () => {
-  it('maps a row to the documented card (commentCount still stubbed at 0)', () => {
+  it('maps a row to the documented card', () => {
     expect(toPostCard(sampleCardRow)).toEqual({
       id: 42,
       title: 'On absurdism',
@@ -108,20 +109,21 @@ describe('toPostCard / toPostDetail', () => {
     });
   });
 
-  it('surfaces real like/bookmark count and viewer state from the row', () => {
+  it('surfaces real like/comment counts and viewer state from the row', () => {
     const card = toPostCard({
       ...sampleCardRow,
       like_count: 7,
+      comment_count: 4,
       liked_by_me: true,
       bookmarked_by_me: true,
     });
 
-    // Step 4 fills these from the SQL; commentCount stays 0 until step 5.
+    // Steps 4 (likes/bookmarks) and 5 (comments) fill every card field from SQL.
     expect(card).toMatchObject({
       likeCount: 7,
+      commentCount: 4,
       likedByMe: true,
       bookmarkedByMe: true,
-      commentCount: 0,
     });
   });
 

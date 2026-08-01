@@ -275,6 +275,12 @@ There is no `GET /api/comments/:commentId`. Comments always load as a list belon
 to a post, and no screen displays one in isolation. It would only become necessary
 for deep-linking to a single comment.
 
+Listing or commenting on a post that doesn't exist returns
+`404 { "error": { "message": "Post not found" } }`; updating or deleting a comment
+that doesn't exist returns `404 { "error": { "message": "Comment not found" } }`.
+Comments are a flat list — there is no threading (`comments` has no
+`parent_comment_id`), so `<comment>` carries no replies.
+
 ---
 
 ## Bookmarks

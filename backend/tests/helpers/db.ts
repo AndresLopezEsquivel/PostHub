@@ -113,3 +113,14 @@ export async function seedBookmark(input: { userId: number; postId: number }): P
     [input.userId, input.postId],
   );
 }
+
+export async function seedComment(
+  input: { postId: number; authorId: number; content?: string },
+): Promise<number> {
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO comments (post_id, author_id, content)
+     VALUES ($1, $2, $3) RETURNING id`,
+    [input.postId, input.authorId, input.content ?? 'Sample comment.'],
+  );
+  return row!.id;
+}

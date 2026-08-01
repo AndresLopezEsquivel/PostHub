@@ -72,6 +72,7 @@ function cardSelect(viewerParam: string): string {
            WHERE pc.post_id = p.id
          ), '[]') AS categories,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS like_count,
+         (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.id) AS comment_count,
          EXISTS (SELECT 1 FROM post_likes pl
                   WHERE pl.post_id = p.id AND pl.user_id = ${viewerParam}) AS liked_by_me,
          EXISTS (SELECT 1 FROM bookmarks bm
@@ -94,6 +95,7 @@ interface PostCardRow {
   author_avatar_key: string | null;
   categories: CategoryTag[];
   like_count: number;
+  comment_count: number;
   liked_by_me: boolean;
   bookmarked_by_me: boolean;
 }
@@ -130,9 +132,7 @@ export function toPostCard(row: PostCardRow): PostCard {
     },
     categories: row.categories,
     likeCount: row.like_count,
-    // commentCount is still stubbed — step 5 (comments) fills it in via the same
-    // serializer. The like/bookmark fields are now real (step 4).
-    commentCount: 0,
+    commentCount: row.comment_count,
     likedByMe: row.liked_by_me,
     bookmarkedByMe: row.bookmarked_by_me,
     createdAt: row.created_at,

@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The design docs under `docs/` are the source of truth; a backend has landed on
 top of them and is being filled in one resource group at a time. The database
-layer plus the first four groups in the controller order — **categories +
-`GET /api/health`**, **auth**, **posts CRUD**, and **likes + bookmarks** — are
-implemented and tested; the remaining resource groups are still empty mounted
-routers (see "Controller implementation order" below).
+layer plus the first five groups in the controller order — **categories +
+`GET /api/health`**, **auth**, **posts CRUD**, **likes + bookmarks**, and
+**comments** — are implemented and tested; the remaining resource groups are
+still empty mounted routers (see "Controller implementation order" below).
 
 Design specs (still the authority for *what* to build):
 
@@ -31,18 +31,18 @@ Write commit messages in conventional commit format: `type(scope): description`.
 
 Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). Handlers are being
 added **one resource group at a time** against the same mount tree: the
-**categories**, **auth**, **posts**, and **likes/bookmarks** routers now register
-real paths (with services and tests), while every still-empty router (comments,
-users/follows, feed, notifications, uploads) is mounted but registers zero
+**categories**, **auth**, **posts**, **likes/bookmarks**, and **comments** routers
+now register real paths (with services and tests), while every still-empty router
+(users/follows, feed, notifications, uploads) is mounted but registers zero
 paths, so requests to those groups return `404 { "error": { "message": "Not
 found" } }`. That's expected — the next passes fill in the already-mounted files.
 
 Layout mirrors the spec so nothing is guessed: `src/routes/` has one
 `*.routes.ts` per resource group and `src/routes/index.ts` is the single place
 that maps the full mount tree against `api_design.md`. `src/{controllers,services,types}/`
-now hold the categories/auth/posts/likes/bookmarks controllers and services (plus
-the camelCase API-shape types each service owns); they're still populated pass by
-pass — a new
+now hold the categories/auth/posts/likes/bookmarks/comments controllers and
+services (plus the camelCase API-shape types each service owns); they're still
+populated pass by pass — a new
 handler adds its files alongside the existing ones, not pre-stubbed ahead of
 need. `src/app.ts` (importable app) and `src/server.ts` (binds the port) are
 split so the app can be tested without listening.
@@ -118,10 +118,13 @@ those establish.
    serializer is now viewer-aware (`cardSelect(viewerParam)` computes `likeCount`
    and per-viewer `likedByMe`/`bookmarkedByMe`); `commentCount` stays stubbed for
    step 5. `GET /api/bookmarks` reuses the card renderer and pagination envelope.
-5. **Comments** — ⏭️ **next**. Nested + top-level; completes `commentCount` and
-   reuses the step-3 owner guard.
-6. **Users + follows** — profiles with derived counts, and the follow toggle.
-   Follows are the prerequisite for the feed.
+5. **Comments** — ✅ **done** (8c7d8a5). Two route groups (post-scoped GET/POST,
+   comment-scoped PATCH/DELETE) — flat, not threaded (`comments` has no
+   `parent_comment_id`); reuses the step-3 owner guard. Completed `commentCount`
+   as a live `COUNT(*)` in the shared serializer, so every `postCard` field is now
+   real.
+6. **Users + follows** — ⏭️ **next**. Profiles with derived counts, and the follow
+   toggle. Follows are the prerequisite for the feed.
 7. **Feed** — trivial once follows exist: `listPosts` restricted to followees,
    same card renderer and envelope.
 8. **Notifications** — last of the domain, because rows are produced as *side
