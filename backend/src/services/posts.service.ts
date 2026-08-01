@@ -381,6 +381,38 @@ export async function listPostsByAuthor(
   return { data: rows.map(toPostCard), page, limit, total };
 }
 
+// The personalized feed: posts by the authors this user follows, newest-first.
+// Reuses the card machinery a third time (after listBookmarks/listPostsByAuthor);
+// here the follower is also the viewer, so a single $1 binds both the followee
+// subquery and the card's likedByMe/bookmarkedByMe. Own posts never appear — you
+// can't follow yourself (the follows_no_self_follow CHECK), so your id is never in
+// the followee set.
+export async function listFeed(
+  userId: number,
+  params: { page?: unknown; limit?: unknown },
+): Promise<PostList> {
+  const { page, limit } = normalizePagination(params.page, params.limit);
+
+  const scope = 'p.author_id IN (SELECT f.followee_id FROM follows f WHERE f.follower_id = $1)';
+
+  const totalRow = await queryOne<{ total: number }>(
+    `SELECT COUNT(*)::int AS total FROM posts p WHERE ${scope}`,
+    [userId],
+  );
+  const total = totalRow?.total ?? 0;
+
+  const offset = (page - 1) * limit;
+  const rows = await queryMany<PostCardRow>(
+    `${cardSelect('$1')}
+      WHERE ${scope}
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT $2 OFFSET $3`,
+    [userId, limit, offset],
+  );
+
+  return { data: rows.map(toPostCard), page, limit, total };
+}
+
 export async function getPost(
   postId: number,
   viewerId: number | null,

@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The design docs under `docs/` are the source of truth; a backend has landed on
 top of them and is being filled in one resource group at a time. The database
-layer plus the first six groups in the controller order — **categories +
+layer plus the first seven groups in the controller order — **categories +
 `GET /api/health`**, **auth**, **posts CRUD**, **likes + bookmarks**,
-**comments**, and **users + follows** — are implemented and tested; the remaining
-resource groups are still empty mounted routers (see "Controller implementation
+**comments**, **users + follows**, and **feed** — are implemented and tested; the
+remaining resource groups are still empty mounted routers (see "Controller
+implementation
 order" below).
 
 Design specs (still the authority for *what* to build):
@@ -32,17 +33,20 @@ Write commit messages in conventional commit format: `type(scope): description`.
 
 Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). Handlers are being
 added **one resource group at a time** against the same mount tree: the
-**categories**, **auth**, **posts**, **likes/bookmarks**, **comments**, and
-**users/follows** routers now register real paths (with services and tests), while
-every still-empty router (feed, notifications, uploads) is mounted but registers
-zero paths, so requests to those groups return `404 { "error": { "message": "Not
-found" } }`. That's expected — the next passes fill in the already-mounted files.
+**categories**, **auth**, **posts**, **likes/bookmarks**, **comments**,
+**users/follows**, and **feed** routers now register real paths (with services and
+tests), while every still-empty router (notifications, uploads) is mounted but
+registers zero paths, so requests to those groups return `404 { "error": {
+"message": "Not found" } }`. That's expected — the next passes fill in the
+already-mounted files.
 
 Layout mirrors the spec so nothing is guessed: `src/routes/` has one
 `*.routes.ts` per resource group and `src/routes/index.ts` is the single place
 that maps the full mount tree against `api_design.md`. `src/{controllers,services,types}/`
-now hold the categories/auth/posts/likes/bookmarks/comments/users controllers and
-services (plus the camelCase API-shape types each service owns); they're still
+now hold the categories/auth/posts/likes/bookmarks/comments/users/feed controllers
+and services (plus the camelCase API-shape types each service owns; the feed has a
+controller but no service of its own — its `listFeed` lives in `posts.service`
+next to the other card queries); they're still
 populated pass by pass — a new
 handler adds its files alongside the existing ones, not pre-stubbed ahead of
 need. `src/app.ts` (importable app) and `src/server.ts` (binds the port) are
@@ -132,11 +136,16 @@ those establish.
    (self-follow `400`) returning the new state. User posts reuse a new
    `listPostsByAuthor` in `posts.service` (mirrors `listBookmarks`); the `23505`
    predicate moved into `db/pgErrors` as `isUniqueViolation`, shared with `auth`.
-7. **Feed** — ⏭️ **next**. Trivial now that follows exist: `listPosts` restricted to
-   followees, same card renderer and envelope.
-8. **Notifications** — last of the domain, because rows are produced as *side
-   effects* of likes, comments, and follows (steps 4–6). Wiring the inserts into
-   those handlers requires them to already exist.
+7. **Feed** — ✅ **done** (2b085f1). `GET /api/feed`: `listPosts` restricted to
+   followees (`WHERE p.author_id IN (SELECT followee_id FROM follows WHERE
+   follower_id = $me)`), newest-first, same card renderer and envelope. `listFeed`
+   reuses the card machinery a third time (after `listBookmarks`/`listPostsByAuthor`)
+   with a single `$1` for both the followee subquery and the viewer state; own posts
+   never appear (self-follow CHECK). Auth-only (`401` vs a `200` empty page for a
+   user following no one); page/limit only, per the `api_design` contract.
+8. **Notifications** — ⏭️ **next**. Last of the domain, because rows are produced as
+   *side effects* of likes, comments, and follows (steps 4–6). Wiring the inserts
+   into those handlers requires them to already exist.
 9. **Uploads** (`presign`) — orthogonal (S3-dependent, not DB-dependent).
    `imageKey`/`avatar_key` are nullable, so posts and profiles work without it;
    land it whenever AWS credentials are ready.
