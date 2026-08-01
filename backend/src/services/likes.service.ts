@@ -1,7 +1,8 @@
-import { query, queryOne } from '../db/query';
+import { query, queryOne, withTransaction } from '../db/query';
 import { isForeignKeyViolation } from '../db/pgErrors';
 import { notFound } from '../errors/httpError';
 import { assertPostExists } from './posts.service';
+import { insertNotification } from './notifications.service';
 
 // Likes: an idempotent toggle over the post_likes composite-PK table. The row's
 // existence *is* the like, so "like" is an INSERT and "unlike" a DELETE — both
@@ -25,14 +26,33 @@ async function countLikes(postId: number): Promise<number> {
 }
 
 export async function likePost(userId: number, postId: number): Promise<LikeState> {
-  await assertPostExists(postId);
+  // The author is the notification recipient; this SELECT also serves as the
+  // existence check (null → 404), replacing a bare assertPostExists.
+  const post = await queryOne<{ author_id: number }>(
+    'SELECT author_id FROM posts WHERE id = $1',
+    [postId],
+  );
+  if (!post) throw notFound('Post not found');
+
   try {
-    // ON CONFLICT DO NOTHING makes a repeat like a no-op — liking twice isn't an error.
-    await query(
-      `INSERT INTO post_likes (user_id, post_id) VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [userId, postId],
-    );
+    await withTransaction(async (tx) => {
+      // ON CONFLICT DO NOTHING makes a repeat like a no-op — liking twice isn't an
+      // error. RETURNING lets us notify only on a genuine new like (rowCount > 0).
+      const inserted = await tx.query(
+        `INSERT INTO post_likes (user_id, post_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING RETURNING user_id`,
+        [userId, postId],
+      );
+      // Notify the author on a new like, but never notify yourself.
+      if (inserted.rowCount && inserted.rowCount > 0 && post.author_id !== userId) {
+        await insertNotification(tx, {
+          recipientId: post.author_id,
+          actorId: userId,
+          type: 'like',
+          postId,
+        });
+      }
+    });
   } catch (err) {
     // The post could be deleted between the existence check and the insert; the
     // FK violation means it's gone, so surface the same 404, not a 500.

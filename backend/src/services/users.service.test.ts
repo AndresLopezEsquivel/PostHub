@@ -12,7 +12,7 @@ vi.mock('../db/query', () => ({
   withTransaction: vi.fn(),
 }));
 
-import { query, queryOne } from '../db/query';
+import { query, queryOne, withTransaction } from '../db/query';
 import {
   toProfile,
   toFollowUser,
@@ -24,6 +24,7 @@ import {
 
 const mockQuery = query as unknown as Mock;
 const mockQueryOne = queryOne as unknown as Mock;
+const mockWithTransaction = withTransaction as unknown as Mock;
 
 // The row PROFILE_SELECT returns (counts + viewer flag joined), not a raw table row.
 const sampleProfileRow = {
@@ -129,31 +130,48 @@ describe('updateOwnProfile', () => {
 });
 
 describe('followUser', () => {
-  it('400s on a self-follow, without inserting', async () => {
+  it('400s on a self-follow, without opening a transaction', async () => {
     mockQueryOne.mockResolvedValueOnce({ id: 7 }); // resolveUserId → same as follower
     await expect(followUser(7, 'self')).rejects.toMatchObject({ status: 400 });
-    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockWithTransaction).not.toHaveBeenCalled();
   });
 
   it('404s when the target does not exist', async () => {
     mockQueryOne.mockResolvedValueOnce(null); // resolveUserId miss
     await expect(followUser(7, 'ghost')).rejects.toMatchObject({ status: 404 });
-    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockWithTransaction).not.toHaveBeenCalled();
   });
 
-  it('inserts the edge and returns followedByMe true with the recomputed count', async () => {
+  it('inserts the edge, notifies the target, and returns the recomputed count', async () => {
     mockQueryOne
       .mockResolvedValueOnce({ id: 42 }) // resolveUserId
       .mockResolvedValueOnce({ count: 35 }); // countFollowers
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 }); // INSERT
+    const tx = { query: vi.fn().mockResolvedValue({ rows: [{ follower_id: 7 }], rowCount: 1 }) };
+    mockWithTransaction.mockImplementation(async (fn) => fn(tx));
 
     const state = await followUser(7, 'andres');
 
-    expect(mockQuery).toHaveBeenCalledWith(
+    expect(tx.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO follows'),
       [7, 42],
     );
+    expect(tx.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO notifications'),
+      expect.arrayContaining([42, 7, 'follow']),
+    );
     expect(state).toEqual({ username: 'andres', followedByMe: true, followerCount: 35 });
+  });
+
+  it('does not notify on a repeat follow (no row inserted)', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 42 }) // resolveUserId
+      .mockResolvedValueOnce({ count: 35 }); // countFollowers
+    const tx = { query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }) }; // ON CONFLICT: nothing new
+    mockWithTransaction.mockImplementation(async (fn) => fn(tx));
+
+    await followUser(7, 'andres');
+
+    expect(tx.query).toHaveBeenCalledTimes(1); // follow insert only, no notification
   });
 });
 

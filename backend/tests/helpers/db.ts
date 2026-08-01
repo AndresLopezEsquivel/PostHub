@@ -137,3 +137,29 @@ export async function seedComment(
   );
   return row!.id;
 }
+
+// Arrange a notification directly, for tests that read/mark without driving it
+// through a producer. type is 'like' | 'comment' | 'follow'; post_id/comment_id
+// are nullable (a follow has neither, a like has only a post).
+export async function seedNotification(input: {
+  recipientId: number;
+  actorId: number;
+  type: 'like' | 'comment' | 'follow';
+  postId?: number | null;
+  commentId?: number | null;
+  isRead?: boolean;
+}): Promise<number> {
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO notifications (recipient_id, actor_id, type, post_id, comment_id, is_read)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [
+      input.recipientId,
+      input.actorId,
+      input.type,
+      input.postId ?? null,
+      input.commentId ?? null,
+      input.isRead ?? false,
+    ],
+  );
+  return row!.id;
+}

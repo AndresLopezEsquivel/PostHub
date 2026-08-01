@@ -11,7 +11,7 @@ vi.mock('../db/query', () => ({
   withTransaction: vi.fn(),
 }));
 
-import { query, queryOne } from '../db/query';
+import { query, queryOne, withTransaction } from '../db/query';
 import {
   toComment,
   createComment,
@@ -21,6 +21,7 @@ import {
 
 const mockQuery = query as unknown as Mock;
 const mockQueryOne = queryOne as unknown as Mock;
+const mockWithTransaction = withTransaction as unknown as Mock;
 
 // The row the COMMENT_SELECT returns (author joined), not a raw table row.
 const sampleCommentRow = {
@@ -49,36 +50,54 @@ describe('toComment', () => {
 });
 
 describe('createComment', () => {
-  it('404s when the post does not exist, without inserting', async () => {
-    mockQueryOne.mockResolvedValueOnce(null); // assertPostExists → not found
+  it('404s when the post does not exist, without opening a transaction', async () => {
+    mockQueryOne.mockResolvedValueOnce(null); // SELECT author_id → not found
     await expect(createComment(42, 7, { content: 'hi' })).rejects.toMatchObject({ status: 404 });
-    expect(mockQueryOne).toHaveBeenCalledTimes(1); // no INSERT/re-read followed
+    expect(mockQueryOne).toHaveBeenCalledTimes(1);
+    expect(mockWithTransaction).not.toHaveBeenCalled();
   });
 
   it.each([
     ['empty', ''],
     ['whitespace', '   '],
-  ])('rejects %s content with a 400 HttpError on the content field', async (_label, content) => {
-    mockQueryOne.mockResolvedValueOnce({ id: 42 }); // assertPostExists passes
+  ])('rejects %s content with a 400 HttpError, before any write', async (_label, content) => {
+    mockQueryOne.mockResolvedValueOnce({ author_id: 9 }); // post exists
     const rejection = createComment(42, 7, { content });
     await expect(rejection).rejects.toBeInstanceOf(HttpError);
     await expect(rejection).rejects.toMatchObject({ status: 400, field: 'content' });
-    expect(mockQuery).not.toHaveBeenCalled(); // no INSERT on invalid input
+    expect(mockWithTransaction).not.toHaveBeenCalled(); // no INSERT on invalid input
   });
 
-  it('inserts the comment and returns it via the shared select', async () => {
+  it('inserts the comment and notifies the post author', async () => {
     mockQueryOne
-      .mockResolvedValueOnce({ id: 42 }) // assertPostExists
-      .mockResolvedValueOnce({ id: 17 }) // INSERT ... RETURNING id
-      .mockResolvedValueOnce(sampleCommentRow); // re-read
+      .mockResolvedValueOnce({ author_id: 9 }) // post author (not the commenter)
+      .mockResolvedValueOnce(sampleCommentRow); // re-read via fetchCommentRow
+    const tx = { query: vi.fn().mockResolvedValue({ rows: [{ id: 17 }] }) };
+    mockWithTransaction.mockImplementation(async (fn) => fn(tx));
 
     const comment = await createComment(42, 7, { content: 'Great read.' });
 
-    expect(mockQueryOne).toHaveBeenCalledWith(
+    expect(tx.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO comments'),
       [42, 7, 'Great read.'],
     );
+    expect(tx.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO notifications'),
+      expect.arrayContaining([9, 7, 'comment']),
+    );
     expect(comment).toMatchObject({ id: 17, content: 'Great read.', updatedAt: null });
+  });
+
+  it('does not notify on a comment on your own post', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ author_id: 7 }) // author IS the commenter
+      .mockResolvedValueOnce(sampleCommentRow);
+    const tx = { query: vi.fn().mockResolvedValue({ rows: [{ id: 17 }] }) };
+    mockWithTransaction.mockImplementation(async (fn) => fn(tx));
+
+    await createComment(42, 7, { content: 'note to self' });
+
+    expect(tx.query).toHaveBeenCalledTimes(1); // comment insert only, no notification
   });
 });
 

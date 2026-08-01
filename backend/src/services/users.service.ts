@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { query, queryOne, queryMany } from '../db/query';
+import { query, queryOne, queryMany, withTransaction } from '../db/query';
 import { isUniqueViolation } from '../db/pgErrors';
 import { badRequest, conflict, notFound } from '../errors/httpError';
 import {
@@ -8,6 +8,7 @@ import {
   listPostsByAuthor,
   type PostList,
 } from './posts.service';
+import { insertNotification } from './notifications.service';
 
 // Users + follows data access + validation + row→API mapping. Like the other
 // services it holds no req/res/session: the session user is passed in as a plain
@@ -337,11 +338,23 @@ export async function followUser(
   if (targetId === followerId) {
     throw badRequest('You cannot follow yourself');
   }
-  await query(
-    `INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2)
-     ON CONFLICT DO NOTHING`,
-    [followerId, targetId],
-  );
+  await withTransaction(async (tx) => {
+    // RETURNING lets us notify only on a genuine new follow (rowCount > 0); a
+    // repeat follow is a no-op and produces no second notification.
+    const inserted = await tx.query(
+      `INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING RETURNING follower_id`,
+      [followerId, targetId],
+    );
+    if (inserted.rowCount && inserted.rowCount > 0) {
+      // No self-notification guard needed — self-follow is already a 400 above.
+      await insertNotification(tx, {
+        recipientId: targetId,
+        actorId: followerId,
+        type: 'follow',
+      });
+    }
+  });
   return {
     username: targetUsername,
     followedByMe: true,

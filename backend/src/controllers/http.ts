@@ -24,6 +24,15 @@ export function parseCommentId(req: Request): number {
   return id;
 }
 
+// Same, for :notificationId on the /api/notifications routes.
+export function parseNotificationId(req: Request): number {
+  const id = Number(req.params.notificationId);
+  if (!Number.isInteger(id) || id < 1) {
+    throw notFound('Notification not found');
+  }
+  return id;
+}
+
 // The :username segment addresses the user routes. It's always a single path
 // segment (never an array), but Express types it as string | string[]; coerce to
 // a plain string. A missing user is a 404 the service raises when it resolves it.

@@ -432,6 +432,14 @@ POST /api/notifications/read-all
 `post_id` column. `unreadCount` rides along on the list response so the navbar badge
 needs no second request.
 
+**Creation policy** (a like/comment/follow produces a notification as a side
+effect): no self-notifications — liking or commenting on your own post notifies no
+one (self-follow is already rejected). Likes and follows notify only on a genuine
+new relationship; a repeat idempotent `PUT` (already liked/followed) adds none,
+while comments always notify. Notifications are a historical log and persist through
+an unlike/unfollow; the FK `ON DELETE CASCADE` clears them only when the underlying
+post, comment, or user is deleted.
+
 ---
 
 ## Uploads and health

@@ -1,4 +1,4 @@
-import { query, queryOne, queryMany } from '../db/query';
+import { query, queryOne, queryMany, withTransaction } from '../db/query';
 import { badRequest, forbidden, notFound } from '../errors/httpError';
 import {
   Author,
@@ -6,6 +6,7 @@ import {
   avatarKeyToUrl,
   normalizePagination,
 } from './posts.service';
+import { insertNotification } from './notifications.service';
 
 // Comments data access + validation + row→API mapping. Like the other services it
 // holds no req/res/session: the session user is passed in as a plain `userId`.
@@ -127,17 +128,37 @@ export async function createComment(
   authorId: number,
   input: CommentInput,
 ): Promise<Comment> {
-  await assertPostExists(postId);
+  // The post author is the notification recipient; this SELECT also serves as the
+  // existence check (null → 404), replacing a bare assertPostExists.
+  const post = await queryOne<{ author_id: number }>(
+    'SELECT author_id FROM posts WHERE id = $1',
+    [postId],
+  );
+  if (!post) throw notFound('Post not found');
   const content = validateContent(input.content);
 
-  const inserted = await queryOne<{ id: number }>(
-    `INSERT INTO comments (post_id, author_id, content)
-     VALUES ($1, $2, $3) RETURNING id`,
-    [postId, authorId, content],
-  );
+  const newId = await withTransaction(async (tx) => {
+    const inserted = await tx.query<{ id: number }>(
+      `INSERT INTO comments (post_id, author_id, content)
+       VALUES ($1, $2, $3) RETURNING id`,
+      [postId, authorId, content],
+    );
+    const id = inserted.rows[0].id;
+    // Notify the post author, but never notify yourself for your own comment.
+    if (post.author_id !== authorId) {
+      await insertNotification(tx, {
+        recipientId: post.author_id,
+        actorId: authorId,
+        type: 'comment',
+        postId,
+        commentId: id,
+      });
+    }
+    return id;
+  });
 
   // Just inserted, so it exists — re-read through the shared select.
-  const row = await fetchCommentRow(inserted!.id);
+  const row = await fetchCommentRow(newId);
   return toComment(row!);
 }
 
