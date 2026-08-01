@@ -4,9 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-The design docs under `docs/` are the source of truth; a backend scaffold has
-now landed on top of them. Everything is early — no route handlers, no DB
-queries, no auth yet.
+The design docs under `docs/` are the source of truth; a backend has landed on
+top of them and is being filled in one resource group at a time. The database
+layer plus the first three groups in the controller order — **categories +
+`GET /api/health`**, **auth**, and **posts CRUD** — are implemented and tested;
+the remaining resource groups are still empty mounted routers (see "Controller
+implementation order" below).
 
 Design specs (still the authority for *what* to build):
 
@@ -26,18 +29,22 @@ Write commit messages in conventional commit format: `type(scope): description`.
 
 ## Backend
 
-Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). It is a **structural
-scaffold only**: every API resource group from `api_design.md` has an empty
-router that is mounted but registers zero paths, so *every* request currently
-returns `404 { "error": { "message": "Not found" } }`. That's expected — the
-next passes add real handlers to already-mounted files, one resource at a time.
+Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). Handlers are being
+added **one resource group at a time** against the same mount tree: the
+**categories**, **auth**, and **posts** routers now register real paths (with
+services and tests), while every still-empty router (likes/bookmarks, comments,
+users/follows, feed, notifications, uploads) is mounted but registers zero
+paths, so requests to those groups return `404 { "error": { "message": "Not
+found" } }`. That's expected — the next passes fill in the already-mounted files.
 
 Layout mirrors the spec so nothing is guessed: `src/routes/` has one
 `*.routes.ts` per resource group and `src/routes/index.ts` is the single place
 that maps the full mount tree against `api_design.md`. `src/{controllers,services,types}/`
-are placeholder dirs (README only) — populated alongside the first handler that
-needs them, not pre-stubbed. `src/app.ts` (importable app) and `src/server.ts`
-(binds the port) are split so the app can be tested without listening.
+now hold the categories/auth/posts controllers and services (plus the camelCase
+API-shape types each service owns); they're still populated pass by pass — a new
+handler adds its files alongside the existing ones, not pre-stubbed ahead of
+need. `src/app.ts` (importable app) and `src/server.ts` (binds the port) are
+split so the app can be tested without listening.
 
 Conventions baked into the scaffold:
 - **Nested routers use `Router({ mergeParams: true })`** (likes, post-scoped
@@ -91,20 +98,23 @@ assert against before the handlers that assert against them. The spine is 1→2�
 everything from 4 on hangs off the `<postCard>` shape and the ownership pattern
 those establish.
 
-1. **Categories** (+ `GET /api/health`) — the walking skeleton. Read-only, no
-   auth, no ownership, no pagination: proves the DB → service → controller →
-   router → error-envelope pipeline end to end before any hard semantics. `health`
-   just wraps the existing `checkDatabase()`; `createPost` needs category ids anyway.
-2. **Auth** (register / login / logout / session) — the real foundation. Builds
-   password verification, the `connect-pg-simple` session store, and the
-   **`requireAuth` middleware** every later `auth` endpoint imports. Nothing gated
-   is testable until this lands.
-3. **Posts** (CRUD) — the core noun. Establishes the `<postCard>` shape, the
-   pagination envelope, and the **ownership → `403`** pattern every later write
-   reuses. Leave `likeCount`/`likedByMe`/`bookmarkedByMe` at their empty values for
-   now; step 4 fills them in.
-4. **Likes + Bookmarks** — idempotent `PUT`/`DELETE` toggles that retrofit the
-   `postCard` fields step 3 stubbed. Small, and best done while the card code is fresh.
+1. **Categories** (+ `GET /api/health`) — ✅ **done** (c19bc63). The walking
+   skeleton. Read-only, no auth, no ownership, no pagination: proves the DB →
+   service → controller → router → error-envelope pipeline end to end before any
+   hard semantics. `health` just wraps the existing `checkDatabase()`;
+   `createPost` needs category ids anyway.
+2. **Auth** (register / login / logout / session) — ✅ **done** (578acef). The
+   real foundation. Builds password verification, the `connect-pg-simple` session
+   store, and the **`requireAuth` middleware** every later `auth` endpoint
+   imports. Nothing gated is testable until this lands.
+3. **Posts** (CRUD) — ✅ **done** (ebc409a). The core noun. Establishes the
+   `<postCard>` shape, the pagination envelope, and the **ownership → `403`**
+   pattern every later write reuses. `likeCount`/`commentCount`/`likedByMe`/
+   `bookmarkedByMe` are stubbed at their empty values in the card serializer;
+   step 4 fills them in.
+4. **Likes + Bookmarks** — ⏭️ **next**. Idempotent `PUT`/`DELETE` toggles that
+   retrofit the `postCard` fields step 3 stubbed. Small, and best done while the
+   card code is fresh.
 5. **Comments** — nested + top-level; completes `commentCount` and reuses the
    step-3 owner guard.
 6. **Users + follows** — profiles with derived counts, and the follow toggle.
