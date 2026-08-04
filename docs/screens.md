@@ -6,6 +6,51 @@ access it.
 
 ---
 
+## Routes
+
+The addresses each screen is reachable at. Declared in `frontend/src/routes.tsx`, which is the
+single place the URL tree is built — this table mirrors it.
+
+Two rules drive the naming: mirror the paths in `api_design.md` so a route reads as the API call
+behind it, and honour that document's "users are named, everything else is numbered" convention.
+
+| Path | Screen | Access |
+| --- | --- | --- |
+| `/` | 3. Explore | Public |
+| `/login` | 2. Login | Anonymous only |
+| `/register` | 1. Register | Anonymous only |
+| `/feed` | 4. Feed | Authenticated |
+| `/posts/new` | 6. Create post | Authenticated |
+| `/posts/:postId` | 5. Post detail | Public |
+| `/posts/:postId/edit` | 7. Edit post | Authenticated; author check on load |
+| `/users/:username` | 8. Profile | Public |
+| `/users/:username/followers` | 10. Followers / following | Public |
+| `/users/:username/following` | 10. Followers / following | Public |
+| `/settings/profile` | 9. Edit profile | Authenticated (self) |
+| `/notifications` | 11. Notifications | Authenticated (self) |
+| `/bookmarks` | 12. Bookmarks | Authenticated (self) |
+| `*` | Not found | Public |
+
+Notes on the less obvious choices:
+
+- **`/` is Explore**, not `/explore` — it is the public front door and the only screen an
+  anonymous first-time visitor can meaningfully land on.
+- **`/users/:username`, not a bare `/:username`** — a bare segment shares a namespace with every
+  top-level route, so a user registering as `feed` or `login` would shadow a screen.
+- **Followers and following are two paths, one screen.** The tab lives in the URL so each list
+  deep-links and Back/Forward moves between them, matching the two distinct API endpoints.
+- **`/settings/profile`, not `/users/me/edit`** — `/users/:username` is the public,
+  username-addressed namespace, and the self-edit screen is neither (the API uses
+  `PATCH /api/users/me`).
+- **Edit post is gated on authentication, not authorship.** The client cannot know the author
+  until the post loads, so the screen compares the post's author to the session user afterwards.
+  That check is UX; the real gate is the backend's `403`.
+
+Access here is a *client-side* concern only — it decides what to render and where to redirect.
+Every gated action is independently enforced by the API, which is the only authority.
+
+---
+
 ## Public / auth screens
 
 ### 1. Register

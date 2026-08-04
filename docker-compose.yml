@@ -39,5 +39,47 @@ services:
       db:
         condition: service_healthy
 
+  web:
+    build:
+      context: ./frontend
+      target: dev
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume, same reason as the api service: it keeps the image's
+      # npm-ci'd node_modules from being masked by the host bind mount (the host
+      # has no node_modules — there is no host npm). Renew it with
+      # `--renew-anon-volumes` after changing frontend/package.json.
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+      # Where the Vite dev server forwards /api. `api` is the Compose service
+      # name, resolved on the implicit default network — the same way api reaches
+      # db. Deliberately not VITE_-prefixed: a VITE_ variable is inlined into the
+      # client bundle, and an API host reachable from client code is exactly what
+      # docs/api_design.md forbids.
+      API_PROXY_TARGET: http://api:4000
+    depends_on:
+      - api
+
+  # Production-parity check, opt-in:
+  #   docker compose --profile prod-parity up --build web-prod
+  #
+  # Serves the real built bundle through the real nginx.conf on :8080, so the two
+  # things the dev server does differently — SPA history fallback and cache
+  # headers — can be verified before a deploy. Not part of the daily loop.
+  web-prod:
+    profiles: ["prod-parity"]
+    build:
+      context: ./frontend
+      target: production
+    ports:
+      - "8080:80"
+    # Required, not cosmetic: nginx resolves `proxy_pass http://api:4000` once at
+    # startup and exits if the name does not resolve.
+    depends_on:
+      - api
+
 volumes:
   posthub_pgdata:

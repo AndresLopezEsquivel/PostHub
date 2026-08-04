@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["vite/client", "@testing-library/jest-dom"],
+    /* Vite owns the build; tsc is only ever a type checker here. This is the one
+       real divergence from backend/tsconfig.json, which emits to dist/. */
+    "noEmit": true
+  },
+  "include": ["src", "tests"]
+}

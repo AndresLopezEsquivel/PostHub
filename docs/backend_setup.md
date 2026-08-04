@@ -3,10 +3,13 @@
 How to get the `backend/` service running locally. Everything runs through Docker Compose —
 no local Node.js/npm install is required.
 
-**Current state:** the backend is a structural scaffold only (see `CLAUDE.md` and
-`backend/src/routes/`). Every route is mounted but empty, so every request currently returns
-`404 { "error": { "message": "Not found" } }` — that's expected until handlers are implemented
-resource by resource.
+**Current state:** the backend API surface is complete. All nine resource groups — categories,
+auth, posts, likes/bookmarks, comments, users/follows, feed, notifications, and uploads — are
+implemented and tested against `docs/api_design.md`. The one dormant endpoint is
+`POST /api/uploads/presign`, which returns `503 { "error": { "message": "Uploads are not
+configured" } }` until its four S3 environment variables are set.
+
+For the frontend that consumes this API, see [`frontend_setup.md`](./frontend_setup.md).
 
 ---
 
@@ -55,17 +58,24 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Both `api` and `db` should show `Up`, with `db` reporting `(healthy)`.
+`api` and `db` should show `Up`, with `db` reporting `(healthy)`. (`web` appears here too — see
+[`frontend_setup.md`](./frontend_setup.md).)
 
-Hit any mounted API path — since no handlers exist yet, every one currently 404s with the shared
-error envelope, which confirms Express itself booted and is routing correctly:
+The health endpoint confirms both that Express booted and that it can reach Postgres:
+
+```
+curl -i http://localhost:4000/api/health
+```
+
+Expected: `HTTP/1.1 200 OK` with body `{"status":"ok","database":"ok"}`. A `503` with
+`"database":"error"` means the app is up but the database isn't reachable.
+
+Note that content endpoints return empty results until the schema is applied and seeded — see
+the next section:
 
 ```
 curl -i http://localhost:4000/api/posts
-curl -i http://localhost:4000/api/users/andres
 ```
-
-Expected: `HTTP/1.1 404 Not Found` with body `{"error":{"message":"Not found"}}`.
 
 ---
 
@@ -217,8 +227,11 @@ in, so this should only happen after editing `backend/package.json` by hand. Reg
 without needing Node installed locally, using a throwaway container:
 
 ```
-docker run --rm -v "$(pwd)/backend:/app" -w /app node:20-alpine npm install --package-lock-only
+docker run --rm -u "$(id -u):$(id -g)" -e npm_config_cache=/tmp/.npm \
+  -v "$(pwd)/backend:/app" -w /app node:20-alpine npm install --package-lock-only
 ```
+
+The `-u` and `npm_config_cache` flags keep the generated file owned by you rather than root.
 
 **Port already in use.** Something else on the host is bound to `4000` or `5432`. Stop it, or
 change the host-side port mapping in `docker-compose.yml` (e.g. `"4001:4000"`).

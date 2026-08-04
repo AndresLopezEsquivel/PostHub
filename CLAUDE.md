@@ -11,12 +11,19 @@ CRUD**, **likes + bookmarks**, **comments**, **users + follows**, **feed**,
 **notifications**, and **uploads** — are now implemented and tested; the backend
 API surface is complete (see "Controller implementation order" below).
 
+A **frontend scaffold** has since landed in `frontend/` (Vite + React + TypeScript
++ React Router + plain CSS, served by Nginx in production). The shell is real —
+routing, the session bootstrap, guards, nav, error boundary, and the one fetch
+wrapper — but **all twelve screens are placeholders**. They land one pass at a
+time, in the order under "Screen implementation order" below.
+
 Design specs (still the authority for *what* to build):
 
-- `docs/screens.md` — screen inventory (data shown, actions, states, access per screen)
+- `docs/screens.md` — screen inventory (data shown, actions, states, access per screen) + the route table
 - `docs/database_design.md` — PostgreSQL schema, derived directly from the screens
 - `docs/api_design.md` — REST API, derived directly from the schema
 - `docs/backend_setup.md` — how to run the backend locally via Docker Compose
+- `docs/frontend_setup.md` — how to run the frontend, and the same-origin proxy contract
 
 The three specs form a deliberate chain: **screens → schema → API**. Each layer
 justifies its decisions by pointing at the layer before it ("this column exists
@@ -174,18 +181,25 @@ Everything runs through Docker — there is **no host Node/npm** in this
 environment. From the repo root:
 
 ```
-docker compose up --build          # start api (:4000) + postgres (:5432)
+docker compose up --build          # start web (:5173) + api (:4000) + postgres (:5432)
 docker compose up --build -d       # ... detached
 docker compose logs -f api         # watch tsx-watch hot-reload restarts
 docker compose down                # stop; add -v to also wipe the db volume
+
+# Opt-in: the built bundle behind the real nginx.conf, on :8080
+docker compose --profile prod-parity up --build -d web-prod
 ```
 
 `backend/` is bind-mounted into the `api` container and runs `npm run dev`
-(`tsx watch`), so editing `backend/src/**` hot-reloads without a rebuild.
-Rebuild only when `package.json` or the `Dockerfile` changes. See
-`docs/backend_setup.md` for the full workflow, env vars, and troubleshooting
-(e.g. regenerating `package-lock.json` without host npm). No lint command yet —
-add it here when that tooling lands.
+(`tsx watch`), so editing `backend/src/**` hot-reloads without a rebuild;
+`frontend/` is bind-mounted into `web` the same way, running `vite` with HMR.
+Rebuild only when a `package.json` or a `Dockerfile` changes — and add
+`--renew-anon-volumes`, or the stale `node_modules` volume masks the new install.
+See `docs/backend_setup.md` and `docs/frontend_setup.md` for the full workflow,
+env vars, and troubleshooting (e.g. regenerating `package-lock.json` without host
+npm). No lint command yet — add it here when that tooling lands. That is a
+repo-wide decision covering `backend/` too, deliberately not made by the frontend
+scaffold.
 
 **Local dev credentials are intentionally throwaway and committed.** The
 `posthub`/`posthub` Postgres user/password/db in `docker-compose.yml` are
@@ -238,6 +252,117 @@ Conventions to preserve:
 - **Co-located `*.test.ts` are excluded from `tsc`** (`tsconfig.json`) so they
   never compile into `dist/`.
 
+## Frontend
+
+Lives in `frontend/` (Vite + React 19 + TypeScript + React Router + plain CSS).
+Currently a **scaffold**: the shell works end to end, every screen is a
+placeholder. Layout mirrors the backend's so the correspondence is legible:
+
+| Frontend | Backend twin |
+| --- | --- |
+| `src/routes.tsx` — the whole URL tree, in one file | `src/routes/index.ts` |
+| `src/api/*.ts` — one module per resource group, each owning its types | `src/services/*.service.ts` |
+| `src/pages/*.tsx` — one file per screen | `src/controllers/*.controller.ts` |
+| `src/auth/` — provider + guards, cross-cutting | `src/middleware/requireAuth.ts` |
+| `src/api/client.ts` — one wrapper, one `ApiError` | `src/errors/httpError.ts` + `errorHandler` |
+
+Conventions baked into the scaffold:
+
+- **One fetch wrapper.** Every request goes through `request<T>()` in
+  `src/api/client.ts`, which is the only place `fetch` is called and the only
+  place an error becomes an `ApiError` (carrying `status`, `message`, and the
+  optional `field`). Components never branch on `res.ok`.
+- **No base URL, ever.** The client prefixes `/api` and nothing else — Vite
+  proxies it in dev, Nginx in production. A `VITE_API_URL` would make every
+  request cross-origin and break the session cookie, since the backend mounts no
+  CORS middleware on purpose. If anyone reaches for CORS config, the proxy is
+  broken.
+- **Types live next to the code that owns them**, under an `// --- API shapes ---`
+  banner, transcribed from the owning backend service. There is no shared
+  `types/api.ts` barrel, for the same reason the backend has none. The
+  cross-process duplication is deliberate: `api_design.md` is the contract and
+  both sides transcribe it.
+- **Auth status is three states, not a boolean** (`'loading' | 'authenticated' |
+  'anonymous'`). The guards *hold* on `'loading'` rather than redirecting —
+  otherwise every authenticated user who hard-refreshes a deep link is bounced to
+  `/login` and loses their destination. `GET /api/auth/session` answering `401` is
+  the normal logged-out path; `api/auth.ts` is the single place that becomes
+  `null`, and everything else still throws so an outage is never mistaken for a
+  logout.
+- **Guards are layout routes**, not per-element wrappers — one `<RequireAuth />`
+  renders an `<Outlet />` for its subtree, so the rule can't drift between routes.
+  Client-side guards are UX only; the API is the sole authority.
+- **`routes.tsx` exports both `routes` and `router`** — the table can be driven by
+  `createMemoryRouter` in a test at any path, while `router` binds real browser
+  history for `main.tsx`. Same split, same reason, as `app.ts` vs `server.ts`.
+- **`createBrowserRouter` for the table and `errorElement` only** — no `loader`s,
+  no `action`s. Screens fetch through `src/api/*`, so there is one data story.
+  Don't half-adopt the data APIs later.
+- **CSS Modules + global tokens.** Three global stylesheets (`reset`, `tokens`,
+  `base`) imported once in `main.tsx`; everything else is `Component.module.css`
+  beside its component. Components reference `var(--color-…)` / `var(--space-…)`
+  and never hardcode a colour or a spacing value.
+- **Relative imports only — no path aliases.** The repo has none; adding one would
+  need duplicate config across `tsconfig`, `vite.config`, and `vitest.config`.
+- **No data-fetching or state library.** Screens own their loading state. The
+  moment to revisit is pass 4 (optimistic like/bookmark toggles that must stay
+  consistent across four screens) — with evidence, not before.
+
+### Screen implementation order
+
+Same discipline as the controller order: build the primitives later screens
+assert against, before those screens. **Pass 0 (scaffold) is done.**
+
+1. **Register + Login** (+ real nav auth states) — nothing gated is testable until
+   a session can be created *from the UI*; the exact reason auth was backend step
+   2. Establishes `ApiError.field` → form-field error mapping.
+2. **Explore** — the core read path. Establishes the `PostCard` component, the
+   `Paginated<T>` list machinery, filters bound to URL search params (so filter
+   state is shareable), and the loading/empty/error triad every later list reuses.
+   Adds `api/posts.ts`, `api/categories.ts`.
+3. **Post detail + comments** — the detail fetch, the username-based ownership
+   comparison, comment list/compose. Adds `api/comments.ts`.
+4. **Like / bookmark toggles** — retrofits card and detail with optimistic updates
+   driven by the returned `LikeState`/`BookmarkState`, deliberately *after* 2–3,
+   exactly as backend step 4 retrofitted the card fields step 3 stubbed.
+5. **Create / Edit / Delete post** — the first real forms: category multi-select,
+   destructive-action confirmation. Image upload deferred to 9.
+6. **Profile + Edit profile + follows + Followers/Following** — card list's second
+   data source; the follow toggle; `PATCH /users/me` including the
+   username-immutable `400`. Adds `api/users.ts`.
+7. **Feed + Bookmarks** — the card list's third and fourth sources, near-free once
+   2 and 4 exist. Feed's empty state is a call to action, not an absence.
+8. **Notifications + nav unread badge** — last of the domain, mirroring the
+   backend: it reads side effects produced by passes 4–6, and `unreadCount` rides
+   in the list envelope so the badge costs no second request.
+9. **Uploads** (post image + avatar) — orthogonal, S3-dependent, must degrade
+   gracefully on `503`. **Blocked:** `avatarKeyToUrl()` in `posts.service.ts`
+   returns `null` unconditionally and posts expose a raw `imageKey` with no base
+   URL on any endpoint, so the frontend cannot render an image today. The fix is a
+   *backend* pass — resolve keys from an `S3_PUBLIC_BASE_URL`, adding an
+   `imageUrl` field *alongside* `imageKey` (the edit form must still resend the
+   key).
+
+### Testing
+
+Vitest in two projects (`frontend/vitest.config.ts`), mirroring the backend split:
+
+- **unit** — co-located `src/**/*.test.{ts,tsx}`, jsdom, `fetch` stubbed.
+- **integration** — `frontend/tests/integration/**`, rendering the **real** route
+  table and the real `AuthProvider` against **MSW** handlers. MSW intercepts at
+  the network layer, so the real `api/client.ts` executes with its real error
+  mapping — the same parity `supertest` buys the backend against `posthub_test`.
+  `tests/msw/handlers.ts` grows one resource group per pass.
+
+```
+docker compose exec web npm test             # both layers
+docker compose exec web npm run test:unit    # / test:integration / test:watch
+docker compose exec web npm run typecheck    # tsc --noEmit; Vite owns the build
+```
+
+Same rule as the backend: don't pad with unit tests that only assert a URL string
+was built — for thin pass-throughs the integration test is the one that matters.
+
 ## Architecture
 
 **Stack implied by the docs:** PostgreSQL database, a REST backend, and a React
@@ -245,6 +370,17 @@ frontend that talks to it through a same-origin proxy (client code never
 addresses the backend host/port directly — see "Base path" in `api_design.md`).
 Session-based auth via cookie, with sessions persisted using `connect-pg-simple`
 (a library-managed table, deliberately absent from the ERD).
+
+That proxy now has two concrete implementations, and they are the only places the
+backend's address appears: `frontend/vite.config.ts` (`server.proxy`) in dev, and
+`frontend/nginx.conf` (`location /api/`) in production, where Nginx also serves
+the built static bundle. **SPA history fallback is the frontend edge's job, not
+the API's** — the backend JSON-404s every non-`/api` path by design, so
+`try_files $uri $uri/ /index.html` in `nginx.conf` is what makes a hard refresh on
+a deep link work. Note also that `app.ts` sets `trust proxy: 1` under
+`NODE_ENV=production`, which is why `nginx.conf` must forward the
+`X-Forwarded-*` headers: without them Express can't derive `req.secure`, and
+`express-session` silently never emits the `secure` cookie.
 
 **Domain model** (`docs/database_design.md`): `users`, `posts`, `comments` are
 the core content tables. `post_likes`, `bookmarks`, `follows`, `post_categories`
