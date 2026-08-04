@@ -36,3 +36,9 @@ export const notFound = (message: string): HttpError =>
 
 export const conflict = (message: string, field?: string): HttpError =>
   new HttpError(409, message, field);
+
+// The uploads endpoint is dormant until its S3 env is configured; until then it
+// answers 503 rather than 500, since an unconfigured optional feature is an
+// expected state, not a bug.
+export const serviceUnavailable = (message: string): HttpError =>
+  new HttpError(503, message);

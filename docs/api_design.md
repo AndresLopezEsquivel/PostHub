@@ -464,7 +464,20 @@ GET /api/health
 The client `PUT`s the image bytes straight to `uploadUrl`, then submits the returned
 `key` as `imageKey` on the post or profile. The bytes never pass through this backend.
 
-`purpose` is `post` or `avatar`; it determines the key prefix.
+`purpose` is `post` or `avatar`; it determines the key prefix (`posts/` or
+`avatars/`).
+
+`contentType` must be an image type on the server's allowlist —
+`image/jpeg`, `image/png`, `image/webp`, `image/gif` — otherwise `400`. The
+returned `key` is server-generated and opaque: `<prefix>/<uuid>.<ext>` (the client
+never chooses it), and the `ContentType` is bound into the signature, so the
+client's direct `PUT` must send the same `Content-Type` header.
+
+Uploads are an optional, S3-dependent feature: when the backend's S3 environment
+(bucket, region, credentials) is unset the endpoint returns `503` and the feature
+is dormant — `imageKey`/`avatar_key` are nullable, so posts and profiles work
+without it. It goes live the moment the environment is configured, with no code
+change.
 
 ---
 

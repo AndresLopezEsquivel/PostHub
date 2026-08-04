@@ -32,6 +32,16 @@ export default defineConfig({
           name: 'integration',
           include: ['tests/integration/**/*.test.ts'],
           environment: 'node',
+          // Throwaway S3 config so the uploads endpoint is "configured" and can
+          // sign offline (presigning is a purely local computation — no AWS is
+          // contacted). Same spirit as the committed dev DB creds: these unlock
+          // nothing real. Present here at module load, before app.ts imports env.
+          env: {
+            S3_BUCKET: 'posthub-test-bucket',
+            AWS_REGION: 'us-east-1',
+            AWS_ACCESS_KEY_ID: 'test',
+            AWS_SECRET_ACCESS_KEY: 'test',
+          },
           setupFiles: ['tests/setup.ts'],
           pool: 'forks',
           poolOptions: {

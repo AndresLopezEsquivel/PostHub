@@ -5,14 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository state
 
 The design docs under `docs/` are the source of truth; a backend has landed on
-top of them and is being filled in one resource group at a time. The database
-layer plus the first eight groups in the controller order — **categories +
-`GET /api/health`**, **auth**, **posts CRUD**, **likes + bookmarks**,
-**comments**, **users + follows**, **feed**, and **notifications** — are
-implemented and tested; only **uploads** remains as an empty mounted router (see
-"Controller
-implementation
-order" below).
+top of them and was filled in one resource group at a time. All nine groups in
+the controller order — **categories + `GET /api/health`**, **auth**, **posts
+CRUD**, **likes + bookmarks**, **comments**, **users + follows**, **feed**,
+**notifications**, and **uploads** — are now implemented and tested; the backend
+API surface is complete (see "Controller implementation order" below).
 
 Design specs (still the authority for *what* to build):
 
@@ -32,23 +29,24 @@ Write commit messages in conventional commit format: `type(scope): description`.
 
 ## Backend
 
-Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). Handlers are being
-added **one resource group at a time** against the same mount tree: the
-**categories**, **auth**, **posts**, **likes/bookmarks**, **comments**,
-**users/follows**, **feed**, and **notifications** routers now register real paths
-(with services and tests), while only the **uploads** router is still mounted but
-registers zero paths, so requests to it return `404 { "error": { "message": "Not
-found" } }`. That's expected — the last pass fills in that already-mounted file.
+Lives in `backend/` (Node.js 20 + Express 5 + TypeScript). Handlers were added
+**one resource group at a time** against the same mount tree, and all nine now
+register real paths (with services and tests): **categories**, **auth**,
+**posts**, **likes/bookmarks**, **comments**, **users/follows**, **feed**,
+**notifications**, and **uploads**. The uploads endpoint is S3-dependent and stays
+**dormant** (`503 { "error": { "message": "Uploads are not configured" } }`) until
+its four S3 env vars are set — presigning is a local computation, so no AWS is
+contacted unless configured.
 
 Layout mirrors the spec so nothing is guessed: `src/routes/` has one
 `*.routes.ts` per resource group and `src/routes/index.ts` is the single place
 that maps the full mount tree against `api_design.md`. `src/{controllers,services,types}/`
-now hold the categories/auth/posts/likes/bookmarks/comments/users/feed/notifications
+now hold the categories/auth/posts/likes/bookmarks/comments/users/feed/notifications/uploads
 controllers and services (plus the camelCase API-shape types each service owns; the
 feed has a controller but no service of its own — its `listFeed` lives in
-`posts.service` next to the other card queries); they're still
-populated pass by pass — a new
-handler adds its files alongside the existing ones, not pre-stubbed ahead of
+`posts.service` next to the other card queries; uploads has no DB layer at all — its
+service signs S3 URLs). Each handler
+added its files alongside the existing ones, not pre-stubbed ahead of
 need. `src/app.ts` (importable app) and `src/server.ts` (binds the port) are
 split so the app can be tested without listening.
 
@@ -154,9 +152,21 @@ those establish.
    `GET /api/notifications` (`?unread` filter + an always-live `unreadCount` badge),
    `PATCH /:id` (owner guard keyed on `recipient_id`, not `author_id`), and the
    `POST /read-all` action.
-9. **Uploads** (`presign`) — ⏭️ **next**. Orthogonal (S3-dependent, not DB-dependent).
-   `imageKey`/`avatar_key` are nullable, so posts and profiles work without it;
-   land it whenever AWS credentials are ready.
+9. **Uploads** (`presign`) — ✅ **done** (this pass). Orthogonal (S3-dependent, not
+   DB-dependent) and the last group — the API surface is now complete.
+   `POST /api/uploads/presign` (auth) validates `purpose` (→ `posts/`|`avatars/`
+   prefix) and `contentType` (image MIME allowlist → extension), mints an opaque
+   `<prefix>/<uuid>.<ext>` key, and signs a direct-to-S3 `PUT` URL with the AWS SDK
+   (`@aws-sdk/client-s3` + `s3-request-presigner`) — a purely local computation, so
+   the endpoint builds and is fully tested offline with throwaway creds; only the
+   client's later `PUT` needs a real bucket. Config lives in `env.ts` (`S3_BUCKET`,
+   `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional
+   `UPLOAD_URL_TTL`); when any is unset the service's config gate returns `503`
+   (`serviceUnavailable`) and the feature stays dormant — `imageKey`/`avatar_key`
+   are nullable, so posts and profiles work without it. It goes live the moment the
+   env is set, no code change. Deferred (not code): create the bucket + an IAM
+   `s3:PutObject` principal + a **bucket CORS policy allowing `PUT` from the frontend
+   origin** (the usual first gotcha), then set the env vars.
 
 ### Running it
 
