@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 
 import type { PostCard as PostCardData } from '../api/posts';
+import { formatDate } from '../lib/date';
 import styles from './PostCard.module.css';
 
 // The <postCard> rendered once, reused by Explore first and then Post detail's
@@ -11,17 +12,6 @@ import styles from './PostCard.module.css';
 //
 // No avatar image: author.avatarUrl is null on every endpoint until pass 9, so
 // rendering an <img> would only ever show a broken source. The author is a link.
-
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-});
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '' : dateFormat.format(date);
-}
 
 export function PostCard({ post }: { post: PostCardData }) {
   return (

@@ -32,6 +32,15 @@ export interface PostCard {
   createdAt: string;
 }
 
+// Post detail = the card plus the full body and the two fields the detail/edit
+// screens need. imageKey is a raw S3 key with no URL on any endpoint yet (pass 9),
+// so nothing renders it; updatedAt is null until the post is edited.
+export interface PostDetail extends PostCard {
+  content: string;
+  imageKey: string | null;
+  updatedAt: string | null;
+}
+
 export type SortOrder = 'newest' | 'likes';
 
 // Every filter Explore binds to the URL. All optional; request()'s `query` drops
@@ -49,4 +58,10 @@ export type ListParams = {
 
 export function listPosts(params: ListParams = {}, signal?: AbortSignal): Promise<Paginated<PostCard>> {
   return request<Paginated<PostCard>>('/posts', { query: params, signal });
+}
+
+// A missing post answers 404, which request() turns into an ApiError the detail
+// screen renders as its own "post not found" state (not the NotFound route).
+export function getPost(id: number, signal?: AbortSignal): Promise<PostDetail> {
+  return request<PostDetail>(`/posts/${id}`, { signal });
 }

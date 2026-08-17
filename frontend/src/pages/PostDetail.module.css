@@ -1,0 +1,93 @@
+/* Post detail. Tokens only. Centred within the shared container width. */
+
+.page {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  line-height: 1.2;
+}
+
+.meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.meta a {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.meta a:hover {
+  color: var(--color-text);
+}
+
+.edited {
+  font-style: italic;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.tag {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.tag:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+/* pre-wrap preserves the author's line breaks; the content is plain text, not
+   markdown, so no block formatting beyond that. */
+.body {
+  margin-top: var(--space-2);
+  color: var(--color-text);
+  line-height: var(--line-height-base);
+  white-space: pre-wrap;
+}
+
+.counts {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.notFound {
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.notFound button {
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}

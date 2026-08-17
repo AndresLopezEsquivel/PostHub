@@ -64,6 +64,50 @@ export const handlers = [
     const data = items.slice((page - 1) * limit, (page - 1) * limit + limit);
     return HttpResponse.json({ data, page, limit, total });
   }),
+
+  // GET /api/posts/:postId — post detail (card fields + content/imageKey/updatedAt).
+  // Any id present in POSTS resolves; postNotFound() overrides for the 404 branch.
+  http.get('*/api/posts/:postId', ({ params }) => {
+    const post = POSTS.find((x) => x.id === Number(params.postId));
+    if (!post) {
+      return HttpResponse.json({ error: { message: 'Post not found' } }, { status: 404 });
+    }
+    return HttpResponse.json({
+      ...post,
+      content: `Full body of ${post.title}.\nSecond line.`,
+      imageKey: null,
+      updatedAt: null,
+    });
+  }),
+
+  // GET /api/posts/:postId/comments — oldest-first, paged. limit defaults to a
+  // small 2 so "Load more" is reachable with the three-comment fixture.
+  http.get('*/api/posts/:postId/comments', ({ request }) => {
+    const p = new URL(request.url).searchParams;
+    const limit = Number(p.get('limit')) || 2;
+    const page = Number(p.get('page')) || 1;
+    const total = COMMENTS.length;
+    const data = COMMENTS.slice((page - 1) * limit, (page - 1) * limit + limit);
+    return HttpResponse.json({ data, page, limit, total });
+  }),
+
+  // POST /api/posts/:postId/comments — echo back a new comment with a fresh id.
+  http.post('*/api/posts/:postId/comments', async ({ request }) => {
+    const body = (await request.json()) as { content: string };
+    return HttpResponse.json(
+      {
+        id: 9000 + Math.floor(Math.random() * 1000),
+        content: body.content,
+        author: { username: 'andres', avatarUrl: null },
+        createdAt: '2026-08-10T00:00:00.000Z',
+        updatedAt: null,
+      },
+      { status: 201 },
+    );
+  }),
+
+  // DELETE /api/comments/:id — 204, no body.
+  http.delete('*/api/comments/:id', () => new HttpResponse(null, { status: 204 })),
 ];
 
 // --- Posts / categories fixtures ---------------------------------------------
@@ -111,6 +155,15 @@ const POSTS: PostCardFixture[] = [
   card({ id: 3, title: 'Charlie', categories: [TECH], likeCount: 3, createdAt: '2026-08-01T00:00:00.000Z' }),
 ];
 
+// Three comments across two authors (limit 2 → page 1 has two, page 2 the third,
+// so "Load more" is reachable). 'andres' is the logged-in user in the detail test,
+// so the delete affordance shows on comment 2 and not the 'bianca' ones.
+const COMMENTS = [
+  { id: 1, content: 'First comment', author: { username: 'bianca', avatarUrl: null }, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: null },
+  { id: 2, content: 'My own comment', author: { username: 'andres', avatarUrl: null }, createdAt: '2026-08-02T00:00:00.000Z', updatedAt: null },
+  { id: 3, content: 'Third comment', author: { username: 'bianca', avatarUrl: null }, createdAt: '2026-08-03T00:00:00.000Z', updatedAt: null },
+];
+
 // Convenience override for the authenticated case.
 export function sessionHandler(user: { username: string; email: string }) {
   return http.get('*/api/auth/session', () => HttpResponse.json(user));
@@ -143,5 +196,12 @@ export function postsEmpty() {
 export function postsError() {
   return http.get('*/api/posts', () =>
     HttpResponse.json({ error: { message: 'Internal server error' } }, { status: 500 }),
+  );
+}
+
+// A missing post, for Post detail's on-screen 404 state.
+export function postNotFound() {
+  return http.get('*/api/posts/:postId', () =>
+    HttpResponse.json({ error: { message: 'Post not found' } }, { status: 404 }),
   );
 }

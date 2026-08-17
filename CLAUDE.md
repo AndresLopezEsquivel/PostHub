@@ -15,8 +15,8 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 + plain CSS, served by Nginx in production). The shell — routing, the session
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
-order" below. **Passes 1 (Register + Login) and 2 (Explore) are done**; the
-remaining nine screens are still placeholders.
+order" below. **Passes 1 (Register + Login), 2 (Explore), and 3 (Post detail +
+comments) are done**; the remaining eight screens are still placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -343,8 +343,24 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    so it stays assignable to `request`'s `query`) and `api/categories.ts` (a **bare
    array**, not the envelope). The no-data-library call was re-affirmed, not
    overturned — `useAsync` is machinery, not a library.
-3. **Post detail + comments** — the detail fetch, the username-based ownership
-   comparison, comment list/compose. Adds `api/comments.ts`.
+3. **Post detail + comments** — ✅ **done**. `pages/PostDetail.tsx` fetches
+   `getPost` via `useAsync`; its error branch is **404-aware** — a missing post is
+   an on-screen "Post not found" state, not a redirect to the NotFound route (that
+   is for unmatched URLs; a missing resource is a state of the screen). Established
+   the **username-based ownership** compare (`comment.author.username ===
+   user?.username` gates delete; the backend 403 is the real gate — the API exposes
+   no user id). `components/CommentThread.tsx` owns the thread: a **"Load more"**
+   accumulator (each page folded into local `items` exactly once, guarded by the
+   envelope's object identity — not the page number — because a page bump fires the
+   fold effect with the previous page's data still in hand before `useAsync` flips
+   to loading), an auth-gated compose box (anonymous → a "Log in" link carrying
+   `state.from`), and delete-own; a posted comment is the authoritative server
+   object, appended with the count bumped, no refetch. Added `api/comments.ts`
+   (list/create/delete — `updateComment` deferred, since `screens.md` §5 lists no
+   comment edit) and `lib/date.ts` (one shared formatter, now that three screens
+   show timestamps). Deferred to their own passes and still absent here:
+   like/bookmark (4), follow author (6), edit/delete post (5) — the like count is a
+   static label. Post images stay blocked on pass 9.
 4. **Like / bookmark toggles** — retrofits card and detail with optimistic updates
    driven by the returned `LikeState`/`BookmarkState`, deliberately *after* 2–3,
    exactly as backend step 4 retrofitted the card fields step 3 stubbed.
