@@ -1,0 +1,42 @@
+# Production override — layers the prod-only deltas onto docker-compose.yml so
+# the base file stays the zero-config dev default. Run it with an explicit
+# service list (the base still defines the dev `web` vite server, which prod
+# doesn't want):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db api web-prod
+#
+# Secrets come from a git-ignored .env (see .env.example); Compose auto-loads it,
+# and the base file's ${VAR:-posthub} fallbacks resolve to the real values once
+# it exists. Requires Docker Compose >= 2.24 for the `!reset` / `!override` merge
+# tags that strip the dev-only host port publishing instead of concatenating it.
+services:
+  db:
+    # Not reachable from the host in prod — only `api` talks to it over the
+    # compose network. `!reset` clears the base list (a plain `ports: []` would
+    # merge-concatenate and leave 5432:5432 published).
+    ports: !reset []
+
+  api:
+    build:
+      target: production        # the compiled dist/ image, no tsx/bind mount
+    volumes: !reset []          # no source bind mount; run the built artifact
+    ports: !reset []            # nginx reaches it as api:4000 internally
+    environment:
+      NODE_ENV: production       # flips secure cookie + trust proxy on; the rest
+                                 # (DATABASE_URL, SESSION_SECRET) interpolate from
+                                 # .env via the base file's ${VAR} forms
+    restart: unless-stopped
+
+  web-prod:
+    # The nginx edge, now terminating TLS with a self-signed cert. Started
+    # explicitly on the command line, so its base `prod-parity` profile does not
+    # gate it here.
+    ports: !override
+      - "443:443"               # the only public entry point; SG opens 22 + 443
+    volumes:
+      # Deploy-only TLS config mounted over the image's baked-in nginx.conf, so
+      # the committed frontend/nginx.conf stays the plain :80 upstream-TLS variant.
+      - ./frontend/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      # Self-signed cert + key generated on the instance (git-ignored, see certs/).
+      - ./certs:/etc/nginx/certs:ro
+    restart: unless-stopped

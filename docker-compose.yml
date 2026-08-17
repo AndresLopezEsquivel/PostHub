@@ -3,15 +3,18 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: posthub
-      POSTGRES_PASSWORD: posthub
-      POSTGRES_DB: posthub
+      # Interpolated from a git-ignored .env when present (see .env.example);
+      # falls back to the throwaway `posthub` dev creds so local `docker compose
+      # up` needs no .env. docker-compose.prod.yml requires real values via .env.
+      POSTGRES_USER: ${POSTGRES_USER:-posthub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-posthub}
+      POSTGRES_DB: ${POSTGRES_DB:-posthub}
     ports:
       - "5432:5432"
     volumes:
       - posthub_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U posthub -d posthub"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-posthub} -d ${POSTGRES_DB:-posthub}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,13 +31,13 @@ services:
     environment:
       NODE_ENV: development
       PORT: 4000
-      DATABASE_URL: postgresql://posthub:posthub@db:5432/posthub
+      DATABASE_URL: postgresql://${POSTGRES_USER:-posthub}:${POSTGRES_PASSWORD:-posthub}@db:5432/${POSTGRES_DB:-posthub}
       # Throwaway local-dev secret, committed on purpose — same rationale as the
       # posthub/posthub DB creds above: it signs cookies for a disposable local
-      # session store and unlocks nothing real. Do NOT carry this into a deployed
-      # environment; move it to a git-ignored .env when deployment gets real
-      # (see CLAUDE.md).
-      SESSION_SECRET: dev-insecure-secret
+      # session store and unlocks nothing real. The ${SESSION_SECRET:-...} form
+      # lets a git-ignored .env override it for a deployed run (see .env.example);
+      # the literal fallback keeps local `docker compose up` zero-config.
+      SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-secret}
     depends_on:
       db:
         condition: service_healthy
