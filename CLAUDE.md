@@ -15,8 +15,8 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 + plain CSS, served by Nginx in production). The shell — routing, the session
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
-order" below. **Pass 1 (Register + Login) is done**; the remaining ten screens are
-still placeholders.
+order" below. **Passes 1 (Register + Login) and 2 (Explore) are done**; the
+remaining nine screens are still placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -329,10 +329,20 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    flip re-renders the guard, which redirects to `RequireAuth`'s stashed `state.from`
    (else `/`); the forms never call `navigate`, so nothing races the guard. The nav's
    authed/anonymous split (already in the scaffold) now has a real way to toggle.
-2. **Explore** — the core read path. Establishes the `PostCard` component, the
-   `Paginated<T>` list machinery, filters bound to URL search params (so filter
-   state is shareable), and the loading/empty/error triad every later list reuses.
-   Adds `api/posts.ts`, `api/categories.ts`.
+2. **Explore** — ✅ **done**. The core read path. Established `components/PostCard`
+   (the `<postCard>` rendered once, purely presentational so pass 4 can wrap its
+   counts with toggles), `hooks/useAsync` (the shared fetch + loading/success/error
+   lifecycle, with the same stale-result guard as `AuthProvider`'s probe — screens
+   still own their own empty-state copy), and filters bound to the URL via
+   `useSearchParams` (`search`/`category`/`sort`/`page`), so a filtered view is
+   shareable and Back/Forward works; changing a filter resets `page`. Prev/Next
+   pagination off the envelope. **Search lives in the nav** (`NavBar` gained the
+   box the scaffold deferred here): submitting navigates to `/?search=`, which
+   Explore consumes — one search box, per `screens.md`. Added `api/posts.ts`
+   (`listPosts` + the `PostCard` shapes; `ListParams` is a `type`, not `interface`,
+   so it stays assignable to `request`'s `query`) and `api/categories.ts` (a **bare
+   array**, not the envelope). The no-data-library call was re-affirmed, not
+   overturned — `useAsync` is machinery, not a library.
 3. **Post detail + comments** — the detail fetch, the username-based ownership
    comparison, comment list/compose. Adds `api/comments.ts`.
 4. **Like / bookmark toggles** — retrofits card and detail with optimistic updates
