@@ -108,6 +108,27 @@ export const handlers = [
 
   // DELETE /api/comments/:id — 204, no body.
   http.delete('*/api/comments/:id', () => new HttpResponse(null, { status: 204 })),
+
+  // Like toggle — PUT adds, DELETE removes. likeCount is the fixture's base ±1 so
+  // the client's reconcile matches its optimistic guess (no visible jump).
+  http.put('*/api/posts/:postId/like', ({ params }) => {
+    const id = Number(params.postId);
+    const base = POSTS.find((x) => x.id === id)?.likeCount ?? 0;
+    return HttpResponse.json({ postId: id, likeCount: base + 1, likedByMe: true });
+  }),
+  http.delete('*/api/posts/:postId/like', ({ params }) => {
+    const id = Number(params.postId);
+    const base = POSTS.find((x) => x.id === id)?.likeCount ?? 0;
+    return HttpResponse.json({ postId: id, likeCount: base, likedByMe: false });
+  }),
+
+  // Bookmark toggle — no count (private), just the resulting state.
+  http.put('*/api/posts/:postId/bookmark', ({ params }) =>
+    HttpResponse.json({ postId: Number(params.postId), bookmarkedByMe: true }),
+  ),
+  http.delete('*/api/posts/:postId/bookmark', ({ params }) =>
+    HttpResponse.json({ postId: Number(params.postId), bookmarkedByMe: false }),
+  ),
 ];
 
 // --- Posts / categories fixtures ---------------------------------------------
@@ -203,5 +224,12 @@ export function postsError() {
 export function postNotFound() {
   return http.get('*/api/posts/:postId', () =>
     HttpResponse.json({ error: { message: 'Post not found' } }, { status: 404 }),
+  );
+}
+
+// A failing like toggle, for the optimistic-rollback branch.
+export function likeError() {
+  return http.put('*/api/posts/:postId/like', () =>
+    HttpResponse.json({ error: { message: 'Internal server error' } }, { status: 500 }),
   );
 }

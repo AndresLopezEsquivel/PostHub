@@ -1,9 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PostCard as PostCardData } from '../api/posts';
 import { PostCard } from './PostCard';
+
+// The card now composes <EngagementBar>, which reads useAuth via usePostToggles.
+// Mock it anonymous so this stays a focused render test with no AuthProvider — the
+// toggle behaviour itself is covered by the engagement integration test.
+vi.mock('../auth/useAuth', () => ({
+  useAuth: () => ({ status: 'anonymous', user: null }),
+}));
 
 const post: PostCardData = {
   id: 42,
@@ -38,7 +45,8 @@ describe('PostCard', () => {
     expect(screen.getByRole('link', { name: 'Tech' })).toHaveAttribute('href', '/?category=tech');
 
     expect(screen.getByText('A short excerpt.')).toBeInTheDocument();
-    expect(screen.getByText('3 likes')).toBeInTheDocument();
+    // The like count rides in the (interactive) Like button; comments stay static.
+    expect(screen.getByRole('button', { name: 'Like' })).toHaveTextContent('3');
     expect(screen.getByText('5 comments')).toBeInTheDocument();
   });
 

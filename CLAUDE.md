@@ -15,8 +15,9 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 + plain CSS, served by Nginx in production). The shell — routing, the session
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
-order" below. **Passes 1 (Register + Login), 2 (Explore), and 3 (Post detail +
-comments) are done**; the remaining eight screens are still placeholders.
+order" below. **Passes 1 (Register + Login), 2 (Explore), 3 (Post detail +
+comments), and 4 (like/bookmark toggles) are done**; the remaining seven screens
+are still placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -305,9 +306,12 @@ Conventions baked into the scaffold:
   and never hardcode a colour or a spacing value.
 - **Relative imports only — no path aliases.** The repo has none; adding one would
   need duplicate config across `tsconfig`, `vite.config`, and `vitest.config`.
-- **No data-fetching or state library.** Screens own their loading state. The
-  moment to revisit is pass 4 (optimistic like/bookmark toggles that must stay
-  consistent across four screens) — with evidence, not before.
+- **No data-fetching or state library** — re-evaluated at pass 4 (the earmarked
+  checkpoint) and **kept**. The evidence didn't demand one: screens mount one at a
+  time and each refetches on mount, so the only real requirement was
+  optimistic-with-rollback on the clicked element, which `hooks/usePostToggles`
+  does with local state. Screens still own their loading state via `hooks/useAsync`.
+  Revisit only if a genuine co-mounted cross-screen cache need appears.
 
 ### Screen implementation order
 
@@ -361,9 +365,16 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    show timestamps). Deferred to their own passes and still absent here:
    like/bookmark (4), follow author (6), edit/delete post (5) — the like count is a
    static label. Post images stay blocked on pass 9.
-4. **Like / bookmark toggles** — retrofits card and detail with optimistic updates
-   driven by the returned `LikeState`/`BookmarkState`, deliberately *after* 2–3,
-   exactly as backend step 4 retrofitted the card fields step 3 stubbed.
+4. **Like / bookmark toggles** — ✅ **done**. Retrofitted the static counts on the
+   card and detail with **optimistic** toggles driven by the returned
+   `LikeState`/`BookmarkState`, reconciled on success and rolled back on error, in
+   the shared `hooks/usePostToggles` + `components/EngagementBar` — so every list
+   screen (Explore now; Feed/Bookmarks/Profile later) got the interactive toggle
+   for free, `PostCard` staying a thin composition. Anonymous clicks redirect to
+   `/login` carrying `state.from` (engagement requires auth; the count is public).
+   `api/likes.ts` (`PUT`/`DELETE …/like`) and `api/bookmarks.ts` (`PUT`/`DELETE …/bookmark`;
+   the `GET /api/bookmarks` list deferred to pass 7). The data-library re-evaluation
+   this pass earmarked landed on **no library** — see the conventions above.
 5. **Create / Edit / Delete post** — the first real forms: category multi-select,
    destructive-action confirmation. Image upload deferred to 9.
 6. **Profile + Edit profile + follows + Followers/Following** — card list's second

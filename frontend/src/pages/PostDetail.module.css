@@ -68,11 +68,6 @@
   white-space: pre-wrap;
 }
 
-.counts {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
 .notFound {
   padding: var(--space-7) var(--space-4);
   text-align: center;

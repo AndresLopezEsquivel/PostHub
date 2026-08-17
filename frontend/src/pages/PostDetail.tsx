@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { isApiError } from '../api/client';
 import { getPost } from '../api/posts';
 import { CommentThread } from '../components/CommentThread';
+import { EngagementBar } from '../components/EngagementBar';
 import { useAsync } from '../hooks/useAsync';
 import { formatDate } from '../lib/date';
 import styles from './PostDetail.module.css';
@@ -81,7 +82,7 @@ export function PostDetail() {
 
         <div className={styles.body}>{post.content}</div>
 
-        <p className={styles.counts}>{post.likeCount} likes</p>
+        <EngagementBar post={post} />
       </article>
 
       <CommentThread postId={post.id} />
