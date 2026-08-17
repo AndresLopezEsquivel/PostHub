@@ -129,6 +129,28 @@ export const handlers = [
   http.delete('*/api/posts/:postId/bookmark', ({ params }) =>
     HttpResponse.json({ postId: Number(params.postId), bookmarkedByMe: false }),
   ),
+
+  // POST /api/posts — 201 with a new card echoing the submitted title/body. The
+  // create test adds a matching GET /api/posts/100 so the post-create navigation
+  // lands on a real detail.
+  http.post('*/api/posts', async ({ request }) => {
+    const body = (await request.json()) as { title: string; content: string };
+    return HttpResponse.json(
+      card({ id: 100, title: body.title, excerpt: body.content.slice(0, 200) }),
+      { status: 201 },
+    );
+  }),
+
+  // PATCH /api/posts/:postId — 200 echoing the edited card (title override).
+  http.patch('*/api/posts/:postId', async ({ params, request }) => {
+    const id = Number(params.postId);
+    const base = POSTS.find((x) => x.id === id) ?? card({ id, title: 'Post' });
+    const body = (await request.json()) as { title?: string };
+    return HttpResponse.json({ ...base, id, title: body.title ?? base.title });
+  }),
+
+  // DELETE /api/posts/:postId — 204, no body. (Distinct path from …/like, …/bookmark.)
+  http.delete('*/api/posts/:postId', () => new HttpResponse(null, { status: 204 })),
 ];
 
 // --- Posts / categories fixtures ---------------------------------------------

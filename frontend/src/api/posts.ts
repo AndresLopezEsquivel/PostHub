@@ -1,7 +1,6 @@
 import { type Paginated, request } from './client';
 
-// The posts resource (docs/api_design.md "Posts"). This pass only reads the list;
-// getPost/createPost/updatePost/deletePost land with their screens (passes 3 and 5).
+// The posts resource (docs/api_design.md "Posts").
 
 // --- API shapes (mirrors backend/src/services/posts.service.ts) --------------
 
@@ -64,4 +63,36 @@ export function listPosts(params: ListParams = {}, signal?: AbortSignal): Promis
 // screen renders as its own "post not found" state (not the NotFound route).
 export function getPost(id: number, signal?: AbortSignal): Promise<PostDetail> {
   return request<PostDetail>(`/posts/${id}`, { signal });
+}
+
+// Create/update take category IDS, not the {name,slug} tags a card carries — the
+// edit form maps the post's category slugs back to ids via GET /api/categories.
+// imageKey is intentionally omitted this pass (pass 9): create leaves it null, and
+// a partial PATCH that omits it preserves the stored value, so an edit never drops
+// an image it isn't yet able to show.
+export interface CreatePostInput {
+  title: string;
+  content: string;
+  categoryIds: number[];
+}
+
+// Partial by contract, but the edit form always sends title/content/categoryIds
+// (it has them all), so this pass populates every field; the optionality is what
+// keeps it honest with the backend's partial PATCH.
+export interface UpdatePostInput {
+  title?: string;
+  content?: string;
+  categoryIds?: number[];
+}
+
+export function createPost(input: CreatePostInput): Promise<PostCard> {
+  return request<PostCard>('/posts', { method: 'POST', body: input });
+}
+
+export function updatePost(id: number, input: UpdatePostInput): Promise<PostCard> {
+  return request<PostCard>(`/posts/${id}`, { method: 'PATCH', body: input });
+}
+
+export function deletePost(id: number): Promise<void> {
+  return request<void>(`/posts/${id}`, { method: 'DELETE' }); // 204
 }

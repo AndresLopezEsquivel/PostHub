@@ -1,8 +1,10 @@
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 
 import { isApiError } from '../api/client';
 import { getPost } from '../api/posts';
+import { useAuth } from '../auth/useAuth';
 import { CommentThread } from '../components/CommentThread';
+import { DeletePostButton } from '../components/DeletePostButton';
 import { EngagementBar } from '../components/EngagementBar';
 import { useAsync } from '../hooks/useAsync';
 import { formatDate } from '../lib/date';
@@ -11,12 +13,13 @@ import styles from './PostDetail.module.css';
 // docs/screens.md §5 — Post detail. Public to read; writing (comments) requires
 // auth, handled inside CommentThread.
 //
-// Deferred, matching CLAUDE.md's screen order: like/bookmark (pass 4), follow
-// author (pass 6), and edit/delete post (pass 5). The like count is a static label
-// for now, exactly as the card renders it.
+// Deferred, matching CLAUDE.md's screen order: follow author (pass 6). Like/bookmark
+// (pass 4) and the author-only edit/delete (pass 5) are wired below.
 export function PostDetail() {
   const { postId } = useParams();
   const id = Number(postId);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const state = useAsync((signal) => getPost(id, signal), [id]);
 
@@ -83,6 +86,17 @@ export function PostDetail() {
         <div className={styles.body}>{post.content}</div>
 
         <EngagementBar post={post} />
+
+        {/* Author-only controls. Ownership is username-based (no user id in the
+            API); this is UX — the real gate is the backend 403 on PATCH/DELETE. */}
+        {user?.username === post.author.username && (
+          <div className={styles.authorActions}>
+            <Link to={`/posts/${post.id}/edit`} className={styles.editLink}>
+              Edit
+            </Link>
+            <DeletePostButton postId={post.id} onDeleted={() => void navigate('/')} />
+          </div>
+        )}
       </article>
 
       <CommentThread postId={post.id} />

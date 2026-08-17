@@ -16,8 +16,8 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
 order" below. **Passes 1 (Register + Login), 2 (Explore), 3 (Post detail +
-comments), and 4 (like/bookmark toggles) are done**; the remaining seven screens
-are still placeholders.
+comments), 4 (like/bookmark toggles), and 5 (create/edit/delete post) are done**;
+the remaining six screens are still placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -375,8 +375,20 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    `api/likes.ts` (`PUT`/`DELETE …/like`) and `api/bookmarks.ts` (`PUT`/`DELETE …/bookmark`;
    the `GET /api/bookmarks` list deferred to pass 7). The data-library re-evaluation
    this pass earmarked landed on **no library** — see the conventions above.
-5. **Create / Edit / Delete post** — the first real forms: category multi-select,
-   destructive-action confirmation. Image upload deferred to 9.
+5. **Create / Edit / Delete post** — ✅ **done**. The first real content forms, on a
+   shared `components/PostForm` (title via the pass-1 `TextField`, a body textarea, a
+   **checkbox-group** category multi-select; client validation + `ApiError.field`
+   mapping) used by both `pages/CreatePost` and `pages/EditPost` — the same one-form
+   two-callers split as the auth forms. Established the **destructive-action
+   confirmation** as a reusable inline-two-step `components/DeletePostButton`, used by
+   both EditPost and PostDetail's new author-only actions row. Edit is RequireAuth +
+   an **in-screen owner check** (username-based; a non-owner sees a "can't edit"
+   state, the real gate is the backend 403). Two subtleties handled: a card/detail's
+   `categories` carry only `{name,slug}`, so EditPost **maps slugs→ids** via
+   `GET /api/categories` to pre-check boxes; and `imageKey` is **left untouched** —
+   a partial PATCH that omits it preserves the stored value, so pass 5 never sends it
+   (pass 9 adds the image field and the resend). `api/posts.ts` gained
+   `createPost`/`updatePost`/`deletePost`.
 6. **Profile + Edit profile + follows + Followers/Following** — card list's second
    data source; the follow toggle; `PATCH /users/me` including the
    username-immutable `400`. Adds `api/users.ts`.

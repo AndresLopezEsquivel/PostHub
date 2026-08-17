@@ -68,6 +68,26 @@
   white-space: pre-wrap;
 }
 
+.authorActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.editLink {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.editLink:hover {
+  border-color: var(--color-text-muted);
+}
+
 .notFound {
   padding: var(--space-7) var(--space-4);
   text-align: center;

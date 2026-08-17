@@ -1,13 +1,46 @@
+import { useNavigate } from 'react-router';
+
+import { listCategories } from '../api/categories';
+import { createPost } from '../api/posts';
+import { PostForm, type PostFormValues } from '../components/PostForm';
+import { useAsync } from '../hooks/useAsync';
+import styles from './PostForm.page.module.css';
+
+// docs/screens.md §6 — Create post. Authenticated only (route under RequireAuth).
+// Loads the category list for the checkboxes, then hands off to the shared PostForm;
+// on success it lands on the new post's detail.
 export function CreatePost() {
-  // docs/screens.md §6 — Create post. Authenticated only.
-  // TODO(pass 5): POST /api/posts { title, content, categoryIds, imageKey }.
-  // categoryIds come from GET /api/categories (a bare array, not the envelope) —
-  // the ids are NOT in the categories carried on a postCard, which have only
-  // name and slug. Image upload lands in pass 9.
+  const navigate = useNavigate();
+  const categoriesState = useAsync((signal) => listCategories(signal), []);
+
+  async function handleSubmit(values: PostFormValues) {
+    const card = await createPost(values);
+    void navigate(`/posts/${card.id}`);
+  }
+
   return (
-    <section>
+    <section className={styles.page}>
       <h1>Create post</h1>
-      <p>Not implemented yet.</p>
+
+      {categoriesState.status === 'loading' && <p role="status">Loading…</p>}
+
+      {categoriesState.status === 'error' && (
+        <div role="alert" className={styles.error}>
+          <p>Could not load categories.</p>
+          <button type="button" onClick={categoriesState.reload}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {categoriesState.status === 'success' && categoriesState.data && (
+        <PostForm
+          categories={categoriesState.data}
+          submitLabel="Publish"
+          onSubmit={handleSubmit}
+          onCancel={() => void navigate('/')}
+        />
+      )}
     </section>
   );
 }

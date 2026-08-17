@@ -76,8 +76,11 @@ describe('Post detail', () => {
     renderAppAt('/posts/1');
 
     await screen.findByText('My own comment');
-    // Page 1 is [bianca, andres]; only andres's comment is deletable.
-    const deletes = screen.getAllByRole('button', { name: 'Delete' });
+    // Scope to the thread: the detail also shows an author-only post Delete (the
+    // viewer owns post 1), which isn't what this asserts. Page 1 is [bianca,
+    // andres]; only andres's comment is deletable.
+    const thread = screen.getByRole('region', { name: 'Comments' });
+    const deletes = within(thread).getAllByRole('button', { name: 'Delete' });
     expect(deletes).toHaveLength(1);
 
     await user.click(deletes[0]);
