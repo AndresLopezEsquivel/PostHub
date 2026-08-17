@@ -11,11 +11,12 @@ CRUD**, **likes + bookmarks**, **comments**, **users + follows**, **feed**,
 **notifications**, and **uploads** — are now implemented and tested; the backend
 API surface is complete (see "Controller implementation order" below).
 
-A **frontend scaffold** has since landed in `frontend/` (Vite + React + TypeScript
-+ React Router + plain CSS, served by Nginx in production). The shell is real —
-routing, the session bootstrap, guards, nav, error boundary, and the one fetch
-wrapper — but **all twelve screens are placeholders**. They land one pass at a
-time, in the order under "Screen implementation order" below.
+A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Router
++ plain CSS, served by Nginx in production). The shell — routing, the session
+bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
+screens now land one pass at a time in the order under "Screen implementation
+order" below. **Pass 1 (Register + Login) is done**; the remaining ten screens are
+still placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -313,9 +314,21 @@ Conventions baked into the scaffold:
 Same discipline as the controller order: build the primitives later screens
 assert against, before those screens. **Pass 0 (scaffold) is done.**
 
-1. **Register + Login** (+ real nav auth states) — nothing gated is testable until
-   a session can be created *from the UI*; the exact reason auth was backend step
-   2. Establishes `ApiError.field` → form-field error mapping.
+1. **Register + Login** (+ real nav auth states) — ✅ **done**. Nothing gated is
+   testable until a session can be created *from the UI*; the exact reason auth was
+   backend step 2. Both anonymous-only forms (`pages/Register.tsx`, `pages/Login.tsx`)
+   built on a reusable `components/TextField` (label + input + inline error, wired
+   `aria-invalid`/`aria-describedby`) and a shared `AuthForm.module.css`. Established
+   the pattern every later form reuses: mirror the backend's field rules client-side
+   (`pages/authValidation.ts`, transcribed from `auth.service.validateRegistration`)
+   for instant feedback, then map an `ApiError` back onto the form — `.field` (400 bad
+   value, 409 taken) attaches to that input, a field-less error (401 "Invalid
+   credentials") or a transport failure becomes the form-level banner. Login is
+   **email-only** (the backend authenticates on email; `screens.md` §2 reconciled).
+   The **post-success redirect is owned by `AnonymousOnly`**, not the forms — the auth
+   flip re-renders the guard, which redirects to `RequireAuth`'s stashed `state.from`
+   (else `/`); the forms never call `navigate`, so nothing races the guard. The nav's
+   authed/anonymous split (already in the scaffold) now has a real way to toggle.
 2. **Explore** — the core read path. Establishes the `PostCard` component, the
    `Paginated<T>` list machinery, filters bound to URL search params (so filter
    state is shareable), and the loading/empty/error triad every later list reuses.

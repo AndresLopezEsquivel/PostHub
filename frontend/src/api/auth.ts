@@ -21,10 +21,9 @@ export interface RegisterInput {
   password: string;
 }
 
-// Email only — NOT username. docs/screens.md §2 says the login field is "email
-// (or username)", but authenticate() looks up `WHERE email = $1`, so the backend
-// accepts email alone. One of the two has to change; until it does, this type
-// reflects the implementation rather than the doc.
+// Email only — NOT username. authenticate() looks up `WHERE email = $1`, so the
+// backend accepts email alone; docs/screens.md §2 was reconciled to match ("email"),
+// and the Login form labels the field "Email" accordingly.
 export interface LoginInput {
   email: string;
   password: string;

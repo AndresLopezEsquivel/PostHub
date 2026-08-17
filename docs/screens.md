@@ -68,7 +68,7 @@ Every gated action is independently enforced by the API, which is the only autho
 | | |
 | --- | --- |
 | **Data shown** | Empty form. |
-| **Fields** | email (or username), password |
+| **Fields** | email, password |
 | **Actions** | Submit · go to Register |
 | **States** | Invalid credentials error · submitting |
 | **Access** | Anonymous users only. |
