@@ -16,6 +16,7 @@ function renderGuardedAt(status: AuthStatus, initialPath = '/bookmarks') {
     login: async () => {},
     register: async () => {},
     logout: async () => {},
+    refresh: async () => {},
   };
 
   const router = createMemoryRouter(

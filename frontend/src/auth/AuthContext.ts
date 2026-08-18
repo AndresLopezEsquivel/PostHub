@@ -19,6 +19,10 @@ export interface AuthContextValue {
   login(input: LoginInput): Promise<void>;
   register(input: RegisterInput): Promise<void>;
   logout(): Promise<void>;
+  // Re-probe GET /api/auth/session and refresh user/status. Needed because the
+  // session carries the email but UserProfile does not, so after an email change
+  // (Edit profile) this is what keeps user.email current for the next prefill.
+  refresh(): Promise<void>;
 }
 
 // No default value. A component reading this outside the provider is a wiring

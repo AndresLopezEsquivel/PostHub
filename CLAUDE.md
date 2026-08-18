@@ -16,8 +16,9 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
 order" below. **Passes 1 (Register + Login), 2 (Explore), 3 (Post detail +
-comments), 4 (like/bookmark toggles), and 5 (create/edit/delete post) are done**;
-the remaining six screens are still placeholders.
+comments), 4 (like/bookmark toggles), 5 (create/edit/delete post), and 6 (profile +
+edit profile + follows) are done**; the remaining three screens are still
+placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -389,9 +390,19 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    a partial PATCH that omits it preserves the stored value, so pass 5 never sends it
    (pass 9 adds the image field and the resend). `api/posts.ts` gained
    `createPost`/`updatePost`/`deletePost`.
-6. **Profile + Edit profile + follows + Followers/Following** — card list's second
-   data source; the follow toggle; `PATCH /users/me` including the
-   username-immutable `400`. Adds `api/users.ts`.
+6. **Profile + Edit profile + follows + Followers/Following** — ✅ **done**.
+   `pages/Profile` (self vs other via `useAuth` — Edit-profile link vs `FollowButton`,
+   the follower count updating optimistically), `pages/FollowList` (one component, two
+   URL-bound tabs, per-row `FollowButton` hidden on your own row), and
+   `pages/EditProfile` (bio + email + optional new-password/confirm; **username never
+   offered** — immutable; email prefilled from the session since `UserProfile` carries
+   none). The **follow toggle** is `useFollowToggle` + `components/FollowButton`,
+   optimistic/rollback/anon→login exactly like pass 4's engagement. Extracted the
+   reusable **`components/PostCardList`** (the paginated-card triad + Prev/Next, local
+   page) as the card list's second data source — Feed/Bookmarks (pass 7) reuse it;
+   Explore keeps its own copy (URL-bound filters). Added `api/users.ts` and
+   **`AuthProvider.refresh()`** (re-probes the session so a changed email stays current
+   for the next prefill). Avatars still deferred to pass 9.
 7. **Feed + Bookmarks** — the card list's third and fourth sources, near-free once
    2 and 4 exist. Feed's empty state is a call to action, not an absence.
 8. **Notifications + nav unread badge** — last of the domain, mirroring the

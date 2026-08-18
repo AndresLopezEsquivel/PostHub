@@ -69,9 +69,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('anonymous');
   }, []);
 
+  // Re-probe the session on demand (after an email change). Same 401→null path as
+  // the mount probe; a real failure is left to propagate to the caller.
+  const refresh = useCallback(async () => {
+    const sessionUser = await getSession();
+    setUser(sessionUser);
+    setStatus(sessionUser ? 'authenticated' : 'anonymous');
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout }),
-    [status, user, login, register, logout],
+    () => ({ status, user, login, register, logout, refresh }),
+    [status, user, login, register, logout, refresh],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

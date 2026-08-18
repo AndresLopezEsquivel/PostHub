@@ -151,6 +151,68 @@ export const handlers = [
 
   // DELETE /api/posts/:postId — 204, no body. (Distinct path from …/like, …/bookmark.)
   http.delete('*/api/posts/:postId', () => new HttpResponse(null, { status: 204 })),
+
+  // GET /api/users/:username — public profile. followerCount 10; followedByMe false
+  // by default (the follow test toggles it). userNotFound() overrides for 404.
+  http.get('*/api/users/:username', ({ params }) => HttpResponse.json(userProfile(String(params.username)))),
+
+  // GET /api/users/:username/posts — the author's posts (POSTS are all by 'andres').
+  http.get('*/api/users/:username/posts', ({ params, request }) => {
+    const username = String(params.username);
+    const items = POSTS.filter((x) => x.author.username === username);
+    const p = new URL(request.url).searchParams;
+    const limit = Number(p.get('limit')) || 2;
+    const page = Number(p.get('page')) || 1;
+    return HttpResponse.json({
+      data: items.slice((page - 1) * limit, (page - 1) * limit + limit),
+      page,
+      limit,
+      total: items.length,
+    });
+  }),
+
+  // GET /api/users/:username/followers and /following — the FollowUser list.
+  http.get('*/api/users/:username/followers', () =>
+    HttpResponse.json({ data: FOLLOW_USERS, page: 1, limit: 20, total: FOLLOW_USERS.length }),
+  ),
+  http.get('*/api/users/:username/following', () =>
+    HttpResponse.json({ data: FOLLOW_USERS, page: 1, limit: 20, total: FOLLOW_USERS.length }),
+  ),
+
+  // PATCH /api/users/me — echo a profile with the submitted bio. emailTaken()
+  // overrides for the 409 branch.
+  http.patch('*/api/users/me', async ({ request }) => {
+    const body = (await request.json()) as { bio?: string | null };
+    return HttpResponse.json({ ...userProfile('andres'), bio: body.bio ?? null });
+  }),
+
+  // Follow toggle — FollowState with the target's new follower count (base 10 ±1).
+  http.put('*/api/users/:username/follow', ({ params }) =>
+    HttpResponse.json({ username: String(params.username), followedByMe: true, followerCount: 11 }),
+  ),
+  http.delete('*/api/users/:username/follow', ({ params }) =>
+    HttpResponse.json({ username: String(params.username), followedByMe: false, followerCount: 10 }),
+  ),
+];
+
+// --- Users / follows fixtures ------------------------------------------------
+
+function userProfile(username: string) {
+  return {
+    username,
+    bio: `Bio of ${username}`,
+    avatarUrl: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    postCount: POSTS.filter((x) => x.author.username === username).length,
+    followerCount: 10,
+    followingCount: 5,
+    followedByMe: false,
+  };
+}
+
+const FOLLOW_USERS = [
+  { username: 'carol', avatarUrl: null, bio: 'Carol writes things.', followedByMe: false },
+  { username: 'dave', avatarUrl: null, bio: null, followedByMe: true },
 ];
 
 // --- Posts / categories fixtures ---------------------------------------------
@@ -253,5 +315,19 @@ export function postNotFound() {
 export function likeError() {
   return http.put('*/api/posts/:postId/like', () =>
     HttpResponse.json({ error: { message: 'Internal server error' } }, { status: 500 }),
+  );
+}
+
+// A missing user, for the profile/follow-list 404 state.
+export function userNotFound() {
+  return http.get('*/api/users/:username', () =>
+    HttpResponse.json({ error: { message: 'User not found' } }, { status: 404 }),
+  );
+}
+
+// An email already registered, for Edit profile's 409-on-the-email-field branch.
+export function emailTaken() {
+  return http.patch('*/api/users/me', () =>
+    HttpResponse.json({ error: { message: 'Email already registered', field: 'email' } }, { status: 409 }),
   );
 }
