@@ -15,10 +15,10 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 + plain CSS, served by Nginx in production). The shell — routing, the session
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
-order" below. **Passes 1 (Register + Login), 2 (Explore), 3 (Post detail +
-comments), 4 (like/bookmark toggles), 5 (create/edit/delete post), 6 (profile + edit
-profile + follows), and 7 (Feed + Bookmarks) are done**; the remaining two screens
-(Notifications, Uploads) are still placeholders.
+order" below. **Passes 1–8 are done** (Register/Login, Explore, Post detail +
+comments, like/bookmark toggles, create/edit/delete post, profile + follows, Feed +
+Bookmarks, and Notifications + nav badge); the whole domain UI is built. Only
+**pass 9 (Uploads)** remains, and it is blocked on a backend image-URL pass (§a).
 
 Design specs (still the authority for *what* to build):
 
@@ -414,9 +414,18 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    `onBookmarkChange` (`usePostToggles`→`EngagementBar`→`PostCard`) and the list drops
    the id. That's one callback within one list, still no shared store (pass 4's call
    holds). Both routes were already `RequireAuth`-guarded, so the 401 is a backstop.
-8. **Notifications + nav unread badge** — last of the domain, mirroring the
-   backend: it reads side effects produced by passes 4–6, and `unreadCount` rides
-   in the list envelope so the badge costs no second request.
+8. **Notifications + nav unread badge** — ✅ **done**. Last of the domain; reads the
+   side effects passes 4–6 produce. `pages/Notifications` lists like/comment/follow
+   rows (each a `<Link>` to its source — the post for like/comment, the actor profile
+   for follow); **opening a row marks it read and navigates** (optimistic PATCH,
+   best-effort), plus a **Mark all read**. The **nav badge** is fed by a small shared
+   `notifications/UnreadProvider` + `useUnread` (mounted in `main.tsx` inside
+   `AuthProvider`, outside the router) — `unreadCount` rides in the list envelope, so
+   it reuses `GET /api/notifications` (no separate count endpoint), and the screen
+   pushes updates to it on read. Its context default is non-null (a no-op) so `NavBar`
+   renders without the provider — safe because the badge is cosmetic, not a gate (why
+   `useUnread` doesn't throw like `useAuth`). Added `api/notifications.ts`. No `?unread`
+   filter toggle (not in `screens.md` §11).
 9. **Uploads** (post image + avatar) — orthogonal, S3-dependent, must degrade
    gracefully on `503`. **Blocked:** `avatarKeyToUrl()` in `posts.service.ts`
    returns `null` unconditionally and posts expose a raw `imageKey` with no base

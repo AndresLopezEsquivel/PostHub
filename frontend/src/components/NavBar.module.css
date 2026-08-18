@@ -43,6 +43,19 @@
   font-weight: 600;
 }
 
+/* The unread badge, tucked against the Notifications link. */
+.badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.4;
+  color: #ffffff;
+  background: var(--color-danger);
+  border-radius: 999px;
+}
+
 .search {
   display: flex;
 }

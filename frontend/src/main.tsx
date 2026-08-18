@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 
 import { AuthProvider } from './auth/AuthProvider';
+import { UnreadProvider } from './notifications/UnreadProvider';
 import { router } from './routes';
 
 // Order matters: reset neutralises browser defaults, tokens defines the
@@ -21,7 +22,11 @@ createRoot(rootElement).render(
         both guards, and every screen consume it, and it must survive route
         changes without re-running the session probe. */}
     <AuthProvider>
-      <RouterProvider router={router} />
+      {/* Holds the unread-notifications count for the nav badge; inside AuthProvider
+          (needs the session), outside the router (the badge is on every screen). */}
+      <UnreadProvider>
+        <RouterProvider router={router} />
+      </UnreadProvider>
     </AuthProvider>
   </StrictMode>,
 );

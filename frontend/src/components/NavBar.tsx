@@ -2,6 +2,7 @@ import { type FormEvent } from 'react';
 import { createSearchParams, Link, NavLink, useNavigate, useSearchParams } from 'react-router';
 
 import { useAuth } from '../auth/useAuth';
+import { useUnread } from '../notifications/useUnread';
 import styles from './NavBar.module.css';
 
 // A global search box, present on every screen per docs/screens.md. It owns no
@@ -43,12 +44,12 @@ function SearchForm() {
 //                   create post · profile · logout
 //   anonymous     — logo · Explore · search · Login · Register
 //
-// Deferred to later passes, deliberately: the unread badge on notifications
-// (pass 8, fed by the unreadCount that rides in the notifications list envelope),
-// and the avatar menu — the session response carries no avatar, and avatarUrl is
-// stubbed null backend-side, so there is nothing to render yet.
+// Deferred to a later pass, deliberately: the avatar menu — the session response
+// carries no avatar, and avatarUrl is stubbed null backend-side, so there is nothing
+// to render yet.
 export function NavBar() {
   const { status, user, logout } = useAuth();
+  const { unreadCount } = useUnread();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -76,7 +77,14 @@ export function NavBar() {
         {status === 'authenticated' && user && (
           <>
             <NavLink to="/feed">Feed</NavLink>
-            <NavLink to="/notifications">Notifications</NavLink>
+            <NavLink to="/notifications">
+              Notifications
+              {unreadCount > 0 && (
+                <span className={styles.badge} aria-label={`${unreadCount} unread`}>
+                  {unreadCount}
+                </span>
+              )}
+            </NavLink>
             <NavLink to="/bookmarks">Bookmarks</NavLink>
             <NavLink to="/posts/new">Create post</NavLink>
             <NavLink to={`/users/${user.username}`}>{user.username}</NavLink>

@@ -221,6 +221,56 @@ export const handlers = [
       total: items.length,
     });
   }),
+
+  // GET /api/notifications — a like, a comment, and a follow; two unread. unreadCount
+  // is the full tally regardless of pagination. notificationsEmpty() overrides.
+  http.get('*/api/notifications', () =>
+    HttpResponse.json({
+      data: NOTIFICATIONS,
+      page: 1,
+      limit: 20,
+      total: NOTIFICATIONS.length,
+      unreadCount: NOTIFICATIONS.filter((n) => !n.isRead).length,
+    }),
+  ),
+
+  // PATCH /api/notifications/:id — echo the new read state.
+  http.patch('*/api/notifications/:id', async ({ params, request }) => {
+    const body = (await request.json()) as { isRead: boolean };
+    return HttpResponse.json({ id: Number(params.id), isRead: body.isRead });
+  }),
+
+  // POST /api/notifications/read-all — clears the tally.
+  http.post('*/api/notifications/read-all', () => HttpResponse.json({ unreadCount: 0 })),
+];
+
+// --- Notifications fixtures --------------------------------------------------
+
+const NOTIFICATIONS = [
+  {
+    id: 1,
+    type: 'like' as const,
+    actor: { username: 'carol', avatarUrl: null },
+    post: { id: 1, title: 'Alpha' },
+    isRead: false,
+    createdAt: '2026-08-03T00:00:00.000Z',
+  },
+  {
+    id: 2,
+    type: 'comment' as const,
+    actor: { username: 'dave', avatarUrl: null },
+    post: { id: 2, title: 'Bravo' },
+    isRead: false,
+    createdAt: '2026-08-02T00:00:00.000Z',
+  },
+  {
+    id: 3,
+    type: 'follow' as const,
+    actor: { username: 'erin', avatarUrl: null },
+    post: null,
+    isRead: true,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
 ];
 
 // --- Users / follows fixtures ------------------------------------------------
@@ -371,5 +421,12 @@ export function feedEmpty() {
 export function bookmarksEmpty() {
   return http.get('*/api/bookmarks', () =>
     HttpResponse.json({ data: [], page: 1, limit: 20, total: 0 }),
+  );
+}
+
+// No notifications (and no unread), for the empty state and a clear badge.
+export function notificationsEmpty() {
+  return http.get('*/api/notifications', () =>
+    HttpResponse.json({ data: [], page: 1, limit: 20, total: 0, unreadCount: 0 }),
   );
 }
