@@ -1,10 +1,9 @@
-import { request } from './client';
+import { type Paginated, request } from './client';
+import type { PostCard } from './posts';
 
-// The bookmarks toggle (docs/api_design.md "Bookmarks"). Structurally identical to
-// likes, but private — so the state carries no count, only bookmarkedByMe.
-//
-// GET /api/bookmarks (the saved-posts list) is deferred to pass 7, when the
-// Bookmarks screen lands — added per need, like the backend controllers.
+// The bookmarks resource (docs/api_design.md "Bookmarks"). The toggle is private —
+// so its state carries no count, only bookmarkedByMe. The saved-posts list reuses
+// the same <postCard> as Explore (its rows are all bookmarkedByMe: true).
 
 // --- API shapes (mirrors backend/src/services/bookmarks.service.ts) ----------
 
@@ -19,4 +18,12 @@ export function bookmarkPost(postId: number): Promise<BookmarkState> {
 
 export function unbookmarkPost(postId: number): Promise<BookmarkState> {
   return request<BookmarkState>(`/posts/${postId}/bookmark`, { method: 'DELETE' });
+}
+
+// The session user's saved posts, newest-saved first (GET /api/bookmarks). Auth-only.
+export function listBookmarks(
+  params: { page?: number; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<Paginated<PostCard>> {
+  return request<Paginated<PostCard>>('/bookmarks', { query: params, signal });
 }

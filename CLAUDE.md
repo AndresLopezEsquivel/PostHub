@@ -16,9 +16,9 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
 order" below. **Passes 1 (Register + Login), 2 (Explore), 3 (Post detail +
-comments), 4 (like/bookmark toggles), 5 (create/edit/delete post), and 6 (profile +
-edit profile + follows) are done**; the remaining three screens are still
-placeholders.
+comments), 4 (like/bookmark toggles), 5 (create/edit/delete post), 6 (profile + edit
+profile + follows), and 7 (Feed + Bookmarks) are done**; the remaining two screens
+(Notifications, Uploads) are still placeholders.
 
 Design specs (still the authority for *what* to build):
 
@@ -403,8 +403,17 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    Explore keeps its own copy (URL-bound filters). Added `api/users.ts` and
    **`AuthProvider.refresh()`** (re-probes the session so a changed email stays current
    for the next prefill). Avatars still deferred to pass 9.
-7. **Feed + Bookmarks** — the card list's third and fourth sources, near-free once
-   2 and 4 exist. Feed's empty state is a call to action, not an absence.
+7. **Feed + Bookmarks** — ✅ **done**. The card list's third and fourth sources,
+   each a screen handing one `load` to `PostCardList` (`pages/Feed`, `pages/Bookmarks`
+   on a shared `CardListPage.module.css`). `api/feed.ts` + `listBookmarks` in
+   `api/bookmarks.ts`. Two spec-driven deltas: `PostCardList`'s empty slot widened to
+   a `ReactNode` so **Feed's empty state is a call to action** (a link to Explore),
+   not an absence — the 200-empty-page a user following no one gets, distinct from the
+   401; and **Bookmarks removes a card the instant it's unbookmarked** via an opt-in
+   `removeOnUnbookmark` — the bookmark toggle reports up through an optional
+   `onBookmarkChange` (`usePostToggles`→`EngagementBar`→`PostCard`) and the list drops
+   the id. That's one callback within one list, still no shared store (pass 4's call
+   holds). Both routes were already `RequireAuth`-guarded, so the 401 is a backstop.
 8. **Notifications + nav unread badge** — last of the domain, mirroring the
    backend: it reads side effects produced by passes 4–6, and `unreadCount` rides
    in the list envelope so the badge costs no second request.

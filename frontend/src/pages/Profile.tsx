@@ -83,7 +83,7 @@ export function Profile() {
       </header>
 
       <h2 className={styles.postsHeading}>Posts</h2>
-      <PostCardList load={loadPosts} emptyMessage="No posts yet." />
+      <PostCardList load={loadPosts} empty="No posts yet." />
     </section>
   );
 }

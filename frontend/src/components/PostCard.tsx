@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 
+import type { BookmarkState } from '../api/bookmarks';
 import type { PostCard as PostCardData } from '../api/posts';
 import { formatDate } from '../lib/date';
 import { EngagementBar } from './EngagementBar';
@@ -14,7 +15,13 @@ import styles from './PostCard.module.css';
 // No avatar image: author.avatarUrl is null on every endpoint until pass 9, so
 // rendering an <img> would only ever show a broken source. The author is a link.
 
-export function PostCard({ post }: { post: PostCardData }) {
+export function PostCard({
+  post,
+  onBookmarkChange,
+}: {
+  post: PostCardData;
+  onBookmarkChange?: (state: BookmarkState) => void;
+}) {
   return (
     <article className={styles.card}>
       <h2 className={styles.title}>
@@ -45,7 +52,7 @@ export function PostCard({ post }: { post: PostCardData }) {
       )}
 
       <div className={styles.engagement}>
-        <EngagementBar post={post} />
+        <EngagementBar post={post} onBookmarkChange={onBookmarkChange} />
         <span className={styles.commentCount}>{post.commentCount} comments</span>
       </div>
     </article>

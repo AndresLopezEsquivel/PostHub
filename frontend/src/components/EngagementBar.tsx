@@ -1,3 +1,4 @@
+import type { BookmarkState } from '../api/bookmarks';
 import { type Engageable, usePostToggles } from '../hooks/usePostToggles';
 import styles from './EngagementBar.module.css';
 
@@ -9,9 +10,15 @@ import styles from './EngagementBar.module.css';
 // keeps the accessible name from flipping under the user). The like count is public
 // and shown to everyone; the click itself is what gates on auth (usePostToggles
 // redirects an anonymous visitor to login).
-export function EngagementBar({ post }: { post: Engageable }) {
+export function EngagementBar({
+  post,
+  onBookmarkChange,
+}: {
+  post: Engageable;
+  onBookmarkChange?: (state: BookmarkState) => void;
+}) {
   const { liked, likeCount, bookmarked, likePending, bookmarkPending, toggleLike, toggleBookmark } =
-    usePostToggles(post);
+    usePostToggles(post, onBookmarkChange);
 
   return (
     <div className={styles.bar}>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
-import { bookmarkPost, unbookmarkPost } from '../api/bookmarks';
+import { type BookmarkState, bookmarkPost, unbookmarkPost } from '../api/bookmarks';
 import { likePost, unlikePost } from '../api/likes';
 import { useAuth } from '../auth/useAuth';
 
@@ -23,7 +23,13 @@ export interface Engageable {
   bookmarkedByMe: boolean;
 }
 
-export function usePostToggles(post: Engageable) {
+// onBookmarkChange lets a list owner react to the reconciled bookmark state — the
+// Bookmarks screen uses it to drop a card the moment it's unbookmarked. Optional, so
+// Explore/Profile/detail pass nothing and behave exactly as before.
+export function usePostToggles(
+  post: Engageable,
+  onBookmarkChange?: (state: BookmarkState) => void,
+) {
   const { status } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,6 +83,7 @@ export function usePostToggles(post: Engageable) {
     try {
       const state = next ? await bookmarkPost(post.id) : await unbookmarkPost(post.id);
       setBookmarked(state.bookmarkedByMe);
+      onBookmarkChange?.(state);
     } catch {
       setBookmarked(prev);
     } finally {

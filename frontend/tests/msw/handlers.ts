@@ -193,6 +193,34 @@ export const handlers = [
   http.delete('*/api/users/:username/follow', ({ params }) =>
     HttpResponse.json({ username: String(params.username), followedByMe: false, followerCount: 10 }),
   ),
+
+  // GET /api/feed — a page of posts (reusing POSTS). feedEmpty() overrides for the CTA.
+  http.get('*/api/feed', ({ request }) => {
+    const p = new URL(request.url).searchParams;
+    const limit = Number(p.get('limit')) || 20;
+    const page = Number(p.get('page')) || 1;
+    return HttpResponse.json({
+      data: POSTS.slice((page - 1) * limit, (page - 1) * limit + limit),
+      page,
+      limit,
+      total: POSTS.length,
+    });
+  }),
+
+  // GET /api/bookmarks — saved posts, every row bookmarkedByMe: true so the toggle
+  // reads "Bookmarked" and unbookmarking removes the card. bookmarksEmpty() overrides.
+  http.get('*/api/bookmarks', ({ request }) => {
+    const p = new URL(request.url).searchParams;
+    const limit = Number(p.get('limit')) || 20;
+    const page = Number(p.get('page')) || 1;
+    const items = POSTS.map((x) => ({ ...x, bookmarkedByMe: true }));
+    return HttpResponse.json({
+      data: items.slice((page - 1) * limit, (page - 1) * limit + limit),
+      page,
+      limit,
+      total: items.length,
+    });
+  }),
 ];
 
 // --- Users / follows fixtures ------------------------------------------------
@@ -329,5 +357,19 @@ export function userNotFound() {
 export function emailTaken() {
   return http.patch('*/api/users/me', () =>
     HttpResponse.json({ error: { message: 'Email already registered', field: 'email' } }, { status: 409 }),
+  );
+}
+
+// An empty feed — a user following no one (a 200 empty page, not a 401).
+export function feedEmpty() {
+  return http.get('*/api/feed', () =>
+    HttpResponse.json({ data: [], page: 1, limit: 20, total: 0 }),
+  );
+}
+
+// An empty bookmarks list.
+export function bookmarksEmpty() {
+  return http.get('*/api/bookmarks', () =>
+    HttpResponse.json({ data: [], page: 1, limit: 20, total: 0 }),
   );
 }

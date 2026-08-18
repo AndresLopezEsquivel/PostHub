@@ -1,11 +1,27 @@
+import { useCallback } from 'react';
+
+import { listBookmarks } from '../api/bookmarks';
+import { PostCardList } from '../components/PostCardList';
+import styles from './CardListPage.module.css';
+
+// docs/screens.md §12 — Bookmarks. Self only (route under RequireAuth). The saved
+// posts through the same <PostCard> as Explore — the fourth data source for one
+// component. removeOnUnbookmark drops a card the moment its bookmark is toggled off,
+// so the list never shows a post you've just removed.
 export function Bookmarks() {
-  // docs/screens.md §12 — Bookmarks. Self only.
-  // TODO(pass 7): GET /api/bookmarks (page/limit only) through the same <PostCard>
-  // as Explore — the fourth data source for one component.
+  const load = useCallback(
+    (page: number, signal: AbortSignal) => listBookmarks({ page }, signal),
+    [],
+  );
+
   return (
-    <section>
+    <section className={styles.page}>
       <h1>Bookmarks</h1>
-      <p>Not implemented yet.</p>
+      <PostCardList
+        load={load}
+        removeOnUnbookmark
+        empty="You haven't bookmarked any posts yet."
+      />
     </section>
   );
 }
