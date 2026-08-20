@@ -6,8 +6,8 @@ import { type Paginated, request } from './client';
 
 export interface Author {
   username: string;
-  // Always null until pass 9 wires S3 — avatarKeyToUrl() returns null today, so no
-  // endpoint carries a real avatar URL yet. The card renders no image while it is null.
+  // The avatar's public (CloudFront) URL, or null when the user has no avatar or
+  // S3_PUBLIC_BASE_URL is unconfigured. Pass 9 renders it; render nothing while null.
   avatarUrl: string | null;
 }
 
@@ -31,12 +31,15 @@ export interface PostCard {
   createdAt: string;
 }
 
-// Post detail = the card plus the full body and the two fields the detail/edit
-// screens need. imageKey is a raw S3 key with no URL on any endpoint yet (pass 9),
-// so nothing renders it; updatedAt is null until the post is edited.
+// Post detail = the card plus the full body and the fields the detail/edit screens
+// need. imageKey is the raw S3 key the edit form resends unchanged; imageUrl is its
+// resolved public (CloudFront) URL for rendering, null when there is no image or
+// S3_PUBLIC_BASE_URL is unconfigured. Pass 9 renders imageUrl; updatedAt is null
+// until the post is edited.
 export interface PostDetail extends PostCard {
   content: string;
   imageKey: string | null;
+  imageUrl: string | null;
   updatedAt: string | null;
 }
 

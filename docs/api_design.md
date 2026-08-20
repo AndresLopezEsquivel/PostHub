@@ -173,7 +173,8 @@ POST /api/posts
 
 GET /api/posts/42
 → (no body)
-← 200 { …<postCard>, "content": "Camus opens with…", "imageKey": null, "updatedAt": null }
+← 200 { …<postCard>, "content": "Camus opens with…",
+        "imageKey": "posts/uuid.jpg", "imageUrl": "https://…/posts/uuid.jpg", "updatedAt": null }
 ← 404 { "error": { "message": "Post not found" } }
 
 PATCH /api/posts/42
@@ -187,10 +188,13 @@ DELETE /api/posts/42
 ```
 
 `getPost` returns the same shape as `<postCard>` plus the full `content`; the list
-endpoint sends `excerpt` only. Detail also carries `imageKey` and `updatedAt` (both
-absent from the list card): the Edit-post screen pre-fills from the current image
-`key`, and Post detail shows an "edited" timestamp. `updatedAt` is `null` until the
-post is first edited.
+endpoint sends `excerpt` only. Detail also carries `imageKey`, `imageUrl`, and
+`updatedAt` (all absent from the list card): the Edit-post screen pre-fills and
+resends the raw `imageKey` unchanged, while `imageUrl` is the rendered image and
+Post detail shows an "edited" timestamp. `imageUrl` (and every `avatarUrl`) is the
+stored key resolved against `S3_PUBLIC_BASE_URL` (the CloudFront domain); it is
+`null` when a key is absent **or** that base is unconfigured. `updatedAt` is `null`
+until the post is first edited.
 
 `createPost` takes `categoryIds`, not category names — the client already holds the
 list from `GET /api/categories`.

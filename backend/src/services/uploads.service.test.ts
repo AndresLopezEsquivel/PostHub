@@ -86,4 +86,25 @@ describe('createUploadUrl', () => {
     expect(filename.endsWith('.png')).toBe(true);
     expect(filename.replace(/\.png$/, '')).toMatch(UUID);
   });
+
+  // Kept LAST on purpose: the S3 client is memoized on first use, so the signing
+  // tests above build (and cache) it with the throwaway static creds. This case then
+  // clears the static keys to prove the config gate no longer 503s on their absence —
+  // the deployed stack supplies credentials via an EC2 instance role instead. It only
+  // asserts the gate is passed (never a 503), not that signing completes; full
+  // role-based signing is verified in deployment.
+  it('passes the config gate with bucket+region only (instance-role path)', async () => {
+    env.s3Bucket = 'posthub-uploads';
+    env.awsRegion = 'us-east-1';
+    env.awsAccessKeyId = '';
+    env.awsSecretAccessKey = '';
+
+    let was503 = false;
+    try {
+      await createUploadUrl({ contentType: 'image/jpeg', purpose: 'post' });
+    } catch (err) {
+      was503 = (err as { status?: number }).status === 503;
+    }
+    expect(was503).toBe(false);
+  });
 });

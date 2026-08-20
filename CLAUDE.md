@@ -18,7 +18,11 @@ screens now land one pass at a time in the order under "Screen implementation
 order" below. **Passes 1–8 are done** (Register/Login, Explore, Post detail +
 comments, like/bookmark toggles, create/edit/delete post, profile + follows, Feed +
 Bookmarks, and Notifications + nav badge); the whole domain UI is built. Only
-**pass 9 (Uploads)** remains, and it is blocked on a backend image-URL pass (§a).
+**pass 9 (Uploads)** remains. Its backend blocker (§a) is now **resolved**: post
+detail carries a resolved `imageUrl` alongside `imageKey`, and `avatarUrl` resolves
+everywhere via `keyToPublicUrl` against `S3_PUBLIC_BASE_URL` (the CloudFront domain);
+the presign endpoint no longer requires static AWS keys, so it works under an EC2
+instance role. Pass 9 (the upload UI + image rendering) is unblocked.
 
 Design specs (still the authority for *what* to build):
 
@@ -427,12 +431,19 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    `useUnread` doesn't throw like `useAuth`). Added `api/notifications.ts`. No `?unread`
    filter toggle (not in `screens.md` §11).
 9. **Uploads** (post image + avatar) — orthogonal, S3-dependent, must degrade
-   gracefully on `503`. **Blocked:** `avatarKeyToUrl()` in `posts.service.ts`
-   returns `null` unconditionally and posts expose a raw `imageKey` with no base
-   URL on any endpoint, so the frontend cannot render an image today. The fix is a
-   *backend* pass — resolve keys from an `S3_PUBLIC_BASE_URL`, adding an
-   `imageUrl` field *alongside* `imageKey` (the edit form must still resend the
-   key).
+   gracefully on `503`. **Backend unblock (§a) — ✅ done** (this pass, alongside the
+   AWS setup: a private bucket behind CloudFront + OAC, an EC2 instance role for
+   `s3:PutObject`). `keyToPublicUrl(key)` in `posts.service.ts` (the single chokepoint
+   for avatars and post images) resolves a stored key against
+   `env.s3PublicBaseUrl` (`S3_PUBLIC_BASE_URL`, the CloudFront domain) → `null` when
+   the key or base is absent; `avatarKeyToUrl` is now a thin wrapper over it, so every
+   `avatarUrl` lights up. `PostDetail` gained `imageUrl` *alongside* `imageKey` (the
+   edit form still resends the raw key). `S3_PUBLIC_BASE_URL` (read) is independent of
+   the presign vars (write): the presign gate relaxed to `S3_BUCKET + AWS_REGION` only,
+   and the S3 client omits explicit `credentials` when no static keys are set, letting
+   the SDK resolve the instance role — so uploads go live under a role with no keys in
+   `.env`. Both stay dormant/null in local dev. **Frontend still to do:** the upload UI
+   (presign → `PUT` → send `key`) + rendering `imageUrl`/`avatarUrl`.
 
 ### Testing
 

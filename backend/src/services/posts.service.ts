@@ -2,6 +2,7 @@ import { PoolClient } from 'pg';
 import { query, queryOne, queryMany, withTransaction } from '../db/query';
 import { isForeignKeyViolation } from '../db/pgErrors';
 import { badRequest, forbidden, notFound } from '../errors/httpError';
+import { env } from '../config/env';
 
 // Posts data access + validation + row→API mapping. Like the other services it
 // holds no req/res/session: the session user is passed in as a plain `userId`.
@@ -38,7 +39,11 @@ export interface PostCard {
 // screens need (image prefill, edited timestamp). See docs/api_design.md getPost.
 export interface PostDetail extends PostCard {
   content: string;
+  // The raw stored key (edit form resends it unchanged) AND its resolved public URL
+  // for rendering. imageUrl is null until S3_PUBLIC_BASE_URL is set, even when a key
+  // is present — the two are independent (key persists without a CDN configured).
   imageKey: string | null;
+  imageUrl: string | null;
   updatedAt: string | null;
 }
 
@@ -115,10 +120,21 @@ export function buildExcerpt(content: string, max = EXCERPT_MAX): string {
   return `${head}…`;
 }
 
-// The single place step 9 (uploads) will build the real S3/CDN URL from a key.
-// No user has an avatar_key yet (register/seed never set it), so this is null.
-export function avatarKeyToUrl(_key: string | null): string | null {
-  return null;
+// The single chokepoint that turns a stored S3 object key into a browser-loadable
+// URL, for both avatars and post images. The base is the CloudFront distribution
+// (env.s3PublicBaseUrl); the bucket is private behind OAC, so there is no raw-S3
+// public URL. Null when unconfigured or keyless, so a missing CDN degrades to "no
+// image" rather than a broken link. The trailing-slash strip keeps the join clean
+// whether or not the base URL ends in one.
+export function keyToPublicUrl(key: string | null): string | null {
+  if (!key || !env.s3PublicBaseUrl) return null;
+  return `${env.s3PublicBaseUrl.replace(/\/$/, '')}/${key}`;
+}
+
+// Avatars resolve through the same base; kept as a named export because the users,
+// comments, and notifications services already import it by this name.
+export function avatarKeyToUrl(key: string | null): string | null {
+  return keyToPublicUrl(key);
 }
 
 export function toPostCard(row: PostCardRow): PostCard {
@@ -144,6 +160,7 @@ export function toPostDetail(row: PostCardRow): PostDetail {
     ...toPostCard(row),
     content: row.content,
     imageKey: row.image_key,
+    imageUrl: keyToPublicUrl(row.image_key),
     updatedAt: row.updated_at,
   };
 }

@@ -38,6 +38,15 @@ services:
       # lets a git-ignored .env override it for a deployed run (see .env.example);
       # the literal fallback keeps local `docker compose up` zero-config.
       SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-secret}
+      # S3 uploads + CloudFront reads. Empty-default ${VAR} forms keep local
+      # `docker compose up` zero-config (unset → uploads dormant 503, images null);
+      # a deployed .env lights them up. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are
+      # deliberately NOT wired here — the deployed stack uses an EC2 instance role,
+      # and the container reaches instance metadata directly.
+      S3_BUCKET: ${S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      UPLOAD_URL_TTL: ${UPLOAD_URL_TTL:-}
     depends_on:
       db:
         condition: service_healthy
