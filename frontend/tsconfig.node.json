@@ -1,0 +1,17 @@
+{
+  /* The config files themselves run in Node, not the browser: they need process.env
+     and no DOM. Kept separate from tsconfig.json so the app's `lib` never leaks
+     Node globals into client code, where they would type-check but not exist. */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["vite.config.ts", "vitest.config.ts"]
+}

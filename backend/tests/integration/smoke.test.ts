@@ -9,8 +9,11 @@ import { seedUser } from '../helpers/db';
 // shared error envelope, the suite runs against the isolated posthub_test
 // database with a clean slate per test, and the int8 parser is in effect.
 describe('integration harness', () => {
-  it('unimplemented routes return the shared 404 envelope', async () => {
-    const res = await request(app).get('/api/posts');
+  it('unmatched routes return the shared 404 envelope', async () => {
+    // A path no resource router will ever own, so this stays 404 as handlers
+    // land pass by pass — it exercises the catch-all notFoundHandler, not any
+    // particular endpoint's absence.
+    const res = await request(app).get('/api/no-such-route');
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: { message: 'Not found' } });

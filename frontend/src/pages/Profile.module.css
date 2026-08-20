@@ -1,0 +1,66 @@
+/* Profile. Tokens only. Centred within the shared container width. */
+
+.page {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.username {
+  font-size: var(--font-size-xl);
+}
+
+.bio {
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.joined {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.counts {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.counts a {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.counts a:hover {
+  color: var(--color-text);
+}
+
+.editLink {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.editLink:hover {
+  border-color: var(--color-text-muted);
+}
+
+.postsHeading {
+  font-size: var(--font-size-lg);
+}

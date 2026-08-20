@@ -63,3 +63,103 @@ export async function seedUser(
   );
   return row!.id;
 }
+
+export async function seedPost(
+  input: {
+    authorId: number;
+    title?: string;
+    content?: string;
+    imageKey?: string | null;
+    categoryIds?: number[];
+  },
+): Promise<number> {
+  const post = {
+    title: 'Sample post',
+    content: 'Sample content for the post body.',
+    imageKey: null as string | null,
+    categoryIds: [] as number[],
+    ...input,
+  };
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO posts (author_id, title, content, image_key)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [post.authorId, post.title, post.content, post.imageKey],
+  );
+  const postId = row!.id;
+  for (const categoryId of post.categoryIds) {
+    await query(
+      `INSERT INTO post_categories (post_id, category_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [postId, categoryId],
+    );
+  }
+  return postId;
+}
+
+// Arrange a like/bookmark directly, for tests that need engagement state without
+// driving it through the API. Idempotent, mirroring the toggle semantics.
+export async function seedLike(input: { userId: number; postId: number }): Promise<void> {
+  await query(
+    `INSERT INTO post_likes (user_id, post_id) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [input.userId, input.postId],
+  );
+}
+
+export async function seedBookmark(input: { userId: number; postId: number }): Promise<void> {
+  await query(
+    `INSERT INTO bookmarks (user_id, post_id) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [input.userId, input.postId],
+  );
+}
+
+// Arrange a follow edge directly. Idempotent, mirroring the toggle semantics; the
+// -er/-ee direction is fixed (follower does the following, followee is followed).
+export async function seedFollow(input: {
+  followerId: number;
+  followeeId: number;
+}): Promise<void> {
+  await query(
+    `INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [input.followerId, input.followeeId],
+  );
+}
+
+export async function seedComment(
+  input: { postId: number; authorId: number; content?: string },
+): Promise<number> {
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO comments (post_id, author_id, content)
+     VALUES ($1, $2, $3) RETURNING id`,
+    [input.postId, input.authorId, input.content ?? 'Sample comment.'],
+  );
+  return row!.id;
+}
+
+// Arrange a notification directly, for tests that read/mark without driving it
+// through a producer. type is 'like' | 'comment' | 'follow'; post_id/comment_id
+// are nullable (a follow has neither, a like has only a post).
+export async function seedNotification(input: {
+  recipientId: number;
+  actorId: number;
+  type: 'like' | 'comment' | 'follow';
+  postId?: number | null;
+  commentId?: number | null;
+  isRead?: boolean;
+}): Promise<number> {
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO notifications (recipient_id, actor_id, type, post_id, comment_id, is_read)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [
+      input.recipientId,
+      input.actorId,
+      input.type,
+      input.postId ?? null,
+      input.commentId ?? null,
+      input.isRead ?? false,
+    ],
+  );
+  return row!.id;
+}

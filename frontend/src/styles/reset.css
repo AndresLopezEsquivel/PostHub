@@ -1,0 +1,59 @@
+/* A small modern reset. Everything here neutralises a browser default that would
+   otherwise have to be overridden repeatedly; nothing here expresses a design
+   choice — those live in tokens.css and base.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+ul[role='list'],
+ol[role='list'] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Long words and URLs in user-authored content shouldn't blow out a layout. */
+p,
+h1,
+h2,
+h3,
+h4 {
+  overflow-wrap: break-word;
+}

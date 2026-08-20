@@ -5,9 +5,9 @@ export type DatabaseHealth =
   | { ok: false; error: string };
 
 // Round-trips the cheapest possible query to confirm the pool can reach the
-// database and get an answer back. A utility only — deliberately NOT wired to
-// GET /api/health this pass; that route stays an empty router until it does
-// real work.
+// database and get an answer back. Backs the GET /api/health readiness probe
+// (see health.controller.ts), which maps { ok: true } → 200 and { ok: false } →
+// 503; the error string is logged here but never surfaced in the response body.
 export async function checkDatabase(): Promise<DatabaseHealth> {
   try {
     await pool.query('SELECT 1');

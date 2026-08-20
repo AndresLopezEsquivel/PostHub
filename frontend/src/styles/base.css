@@ -1,0 +1,64 @@
+/* Element defaults, built entirely on tokens.css. Anything here applies to a bare
+   HTML element on every screen; anything narrower belongs in a component's
+   .module.css. */
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+main {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+h1 {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--space-4);
+}
+
+h2 {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-3);
+}
+
+p + p {
+  margin-top: var(--space-3);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--color-surface);
+}
+
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  overflow-x: auto;
+}
+
+/* :focus-visible rather than :focus, so the ring appears for keyboard navigation
+   without following every mouse click. Never remove it without a replacement —
+   it is the only affordance a keyboard user has for "where am I". */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

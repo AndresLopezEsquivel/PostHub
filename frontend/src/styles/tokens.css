@@ -1,0 +1,46 @@
+/* The app's entire design vocabulary, in one place.
+ *
+ * Components reference these and never hardcode a colour or a spacing value, so
+ * a retheme — or a prefers-color-scheme dark mode, or a [data-theme] attribute —
+ * is one file and touches no component. This is the one stylesheet that is
+ * deliberately global rather than a CSS Module: shared vocabulary is exactly what
+ * scoping should not apply to.
+ */
+
+:root {
+  /* Colour */
+  --color-bg: #ffffff;
+  --color-surface: #fafafa;
+  --color-border: #e4e4e7;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-accent: #4f46e5;
+  --color-danger: #dc2626;
+
+  /* Spacing — a 4px scale; every gap and pad picks a step rather than a number */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Type */
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --line-height-base: 1.6;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
+
+  /* Layout */
+  --container-width: 48rem;
+}

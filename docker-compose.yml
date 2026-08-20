@@ -3,15 +3,18 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: posthub
-      POSTGRES_PASSWORD: posthub
-      POSTGRES_DB: posthub
+      # Interpolated from a git-ignored .env when present (see .env.example);
+      # falls back to the throwaway `posthub` dev creds so local `docker compose
+      # up` needs no .env. docker-compose.prod.yml requires real values via .env.
+      POSTGRES_USER: ${POSTGRES_USER:-posthub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-posthub}
+      POSTGRES_DB: ${POSTGRES_DB:-posthub}
     ports:
       - "5432:5432"
     volumes:
       - posthub_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U posthub -d posthub"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-posthub} -d ${POSTGRES_DB:-posthub}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,10 +31,58 @@ services:
     environment:
       NODE_ENV: development
       PORT: 4000
-      DATABASE_URL: postgresql://posthub:posthub@db:5432/posthub
+      DATABASE_URL: postgresql://${POSTGRES_USER:-posthub}:${POSTGRES_PASSWORD:-posthub}@db:5432/${POSTGRES_DB:-posthub}
+      # Throwaway local-dev secret, committed on purpose — same rationale as the
+      # posthub/posthub DB creds above: it signs cookies for a disposable local
+      # session store and unlocks nothing real. The ${SESSION_SECRET:-...} form
+      # lets a git-ignored .env override it for a deployed run (see .env.example);
+      # the literal fallback keeps local `docker compose up` zero-config.
+      SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-secret}
     depends_on:
       db:
         condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      target: dev
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume, same reason as the api service: it keeps the image's
+      # npm-ci'd node_modules from being masked by the host bind mount (the host
+      # has no node_modules — there is no host npm). Renew it with
+      # `--renew-anon-volumes` after changing frontend/package.json.
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+      # Where the Vite dev server forwards /api. `api` is the Compose service
+      # name, resolved on the implicit default network — the same way api reaches
+      # db. Deliberately not VITE_-prefixed: a VITE_ variable is inlined into the
+      # client bundle, and an API host reachable from client code is exactly what
+      # docs/api_design.md forbids.
+      API_PROXY_TARGET: http://api:4000
+    depends_on:
+      - api
+
+  # Production-parity check, opt-in:
+  #   docker compose --profile prod-parity up --build web-prod
+  #
+  # Serves the real built bundle through the real nginx.conf on :8080, so the two
+  # things the dev server does differently — SPA history fallback and cache
+  # headers — can be verified before a deploy. Not part of the daily loop.
+  web-prod:
+    profiles: ["prod-parity"]
+    build:
+      context: ./frontend
+      target: production
+    ports:
+      - "8080:80"
+    # Required, not cosmetic: nginx resolves `proxy_pass http://api:4000` once at
+    # startup and exits if the name does not resolve.
+    depends_on:
+      - api
 
 volumes:
   posthub_pgdata:

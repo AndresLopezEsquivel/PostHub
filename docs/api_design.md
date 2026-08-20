@@ -173,7 +173,7 @@ POST /api/posts
 
 GET /api/posts/42
 → (no body)
-← 200 { …<postCard>, "content": "Camus opens with…" }
+← 200 { …<postCard>, "content": "Camus opens with…", "imageKey": null, "updatedAt": null }
 ← 404 { "error": { "message": "Post not found" } }
 
 PATCH /api/posts/42
@@ -187,7 +187,10 @@ DELETE /api/posts/42
 ```
 
 `getPost` returns the same shape as `<postCard>` plus the full `content`; the list
-endpoint sends `excerpt` only.
+endpoint sends `excerpt` only. Detail also carries `imageKey` and `updatedAt` (both
+absent from the list card): the Edit-post screen pre-fills from the current image
+`key`, and Post detail shows an "edited" timestamp. `updatedAt` is `null` until the
+post is first edited.
 
 `createPost` takes `categoryIds`, not category names — the client already holds the
 list from `GET /api/categories`.
@@ -236,7 +239,8 @@ DELETE /api/posts/42/like
 ```
 
 Returning the updated count lets the client render the new state without refetching
-the post.
+the post. Liking or unliking a post that doesn't exist returns
+`404 { "error": { "message": "Post not found" } }`.
 
 ---
 
@@ -271,6 +275,12 @@ There is no `GET /api/comments/:commentId`. Comments always load as a list belon
 to a post, and no screen displays one in isolation. It would only become necessary
 for deep-linking to a single comment.
 
+Listing or commenting on a post that doesn't exist returns
+`404 { "error": { "message": "Post not found" } }`; updating or deleting a comment
+that doesn't exist returns `404 { "error": { "message": "Comment not found" } }`.
+Comments are a flat list — there is no threading (`comments` has no
+`parent_comment_id`), so `<comment>` carries no replies.
+
 ---
 
 ## Bookmarks
@@ -296,7 +306,8 @@ GET /api/bookmarks?page=1&limit=20
 ```
 
 No `bookmarkCount` is returned — bookmarks are private, so a public tally would leak
-information the UI never shows.
+information the UI never shows. Bookmarking or unbookmarking a post that doesn't
+exist returns `404 { "error": { "message": "Post not found" } }`.
 
 `GET /api/bookmarks` is scoped to the session user by definition. There is no path
 for reading anyone else's.
@@ -337,7 +348,7 @@ GET /api/users/andres/posts?page=1&limit=20
 ← 200 { "data": [ <postCard>, … ], "page": 1, "limit": 20, "total": 12 }
 
 GET /api/users/andres/followers?page=1&limit=20
-← 200 { "data": [ { …<user>, "bio": "Reading and building." }, … ],
+← 200 { "data": [ { …<user>, "bio": "Reading and building.", "followedByMe": false }, … ],
         "page": 1, "limit": 20, "total": 34 }
 
 PUT /api/users/andres/follow
@@ -351,7 +362,13 @@ DELETE /api/users/andres/follow
 ```
 
 `followedByMe` is the profile's viewer-relative field, and is `false` for anonymous
-callers. `listFollowing` mirrors `listFollowers` exactly.
+callers. Each row of `listFollowers`/`listFollowing` carries its own `followedByMe`
+too, so the list screen can render a per-row follow button without a second request;
+`listFollowing` mirrors `listFollowers` exactly.
+
+A missing `:username` is a uniform `404 { "error": { "message": "User not found" } }`
+across every user-addressed endpoint — the profile, the `/posts`, `/followers`, and
+`/following` sub-lists, and the `follow`/`unfollow` toggle.
 
 `PATCH /api/users/me` **rejects `username` in the body with `400`** — it is not
 silently ignored. Usernames are immutable (see Design decisions), and a silent drop
@@ -415,6 +432,14 @@ POST /api/notifications/read-all
 `post_id` column. `unreadCount` rides along on the list response so the navbar badge
 needs no second request.
 
+**Creation policy** (a like/comment/follow produces a notification as a side
+effect): no self-notifications — liking or commenting on your own post notifies no
+one (self-follow is already rejected). Likes and follows notify only on a genuine
+new relationship; a repeat idempotent `PUT` (already liked/followed) adds none,
+while comments always notify. Notifications are a historical log and persist through
+an unlike/unfollow; the FK `ON DELETE CASCADE` clears them only when the underlying
+post, comment, or user is deleted.
+
 ---
 
 ## Uploads and health
@@ -439,7 +464,20 @@ GET /api/health
 The client `PUT`s the image bytes straight to `uploadUrl`, then submits the returned
 `key` as `imageKey` on the post or profile. The bytes never pass through this backend.
 
-`purpose` is `post` or `avatar`; it determines the key prefix.
+`purpose` is `post` or `avatar`; it determines the key prefix (`posts/` or
+`avatars/`).
+
+`contentType` must be an image type on the server's allowlist —
+`image/jpeg`, `image/png`, `image/webp`, `image/gif` — otherwise `400`. The
+returned `key` is server-generated and opaque: `<prefix>/<uuid>.<ext>` (the client
+never chooses it), and the `ContentType` is bound into the signature, so the
+client's direct `PUT` must send the same `Content-Type` header.
+
+Uploads are an optional, S3-dependent feature: when the backend's S3 environment
+(bucket, region, credentials) is unset the endpoint returns `503` and the feature
+is dormant — `imageKey`/`avatar_key` are nullable, so posts and profiles work
+without it. It goes live the moment the environment is configured, with no code
+change.
 
 ---
 
