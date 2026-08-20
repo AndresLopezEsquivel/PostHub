@@ -175,7 +175,7 @@ describe('POST /api/posts', () => {
 });
 
 describe('GET /api/posts/:postId', () => {
-  it('returns the detail shape with content, imageKey, and updatedAt', async () => {
+  it('returns the detail shape with content, imageKey/imageUrl, and updatedAt', async () => {
     const authorId = await seedUser();
     const postId = await seedPost({
       authorId,
@@ -192,6 +192,7 @@ describe('GET /api/posts/:postId', () => {
       title: 'On absurdism',
       content: 'Camus opens with…',
       imageKey: 'posts/42.jpg',
+      imageUrl: null, // no S3_PUBLIC_BASE_URL in the test env → unresolved
       updatedAt: null,
     });
   });

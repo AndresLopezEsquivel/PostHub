@@ -35,25 +35,33 @@ const EXTENSIONS: Record<string, string> = {
   'image/gif': 'gif',
 };
 
-// Whether all four S3 env vars are present. When any is missing the feature is
-// dormant and the endpoint answers 503.
+// The minimum to sign: a bucket and a region. Credentials are intentionally NOT
+// required here — the deployed stack authenticates via an EC2 instance role, so the
+// AWS_* key pair is absent by design. When both are missing the feature is dormant
+// and the endpoint answers 503.
 function isConfigured(): boolean {
-  return Boolean(
-    env.s3Bucket && env.awsRegion && env.awsAccessKeyId && env.awsSecretAccessKey,
-  );
+  return Boolean(env.s3Bucket && env.awsRegion);
 }
 
-// Lazily memoized client. Only constructed after the config gate, so its region
-// and credentials are always complete.
+// Lazily memoized client, constructed after the config gate. Explicit credentials
+// are passed ONLY when both static keys are present (local/offline signing with
+// throwaway creds); otherwise the client is built with region alone and the SDK's
+// default credential provider chain resolves the EC2 instance role from instance
+// metadata.
 let client: S3Client | null = null;
 function s3(): S3Client {
   if (!client) {
+    const hasStaticCreds = Boolean(env.awsAccessKeyId && env.awsSecretAccessKey);
     client = new S3Client({
       region: env.awsRegion,
-      credentials: {
-        accessKeyId: env.awsAccessKeyId,
-        secretAccessKey: env.awsSecretAccessKey,
-      },
+      ...(hasStaticCreds
+        ? {
+            credentials: {
+              accessKeyId: env.awsAccessKeyId,
+              secretAccessKey: env.awsSecretAccessKey,
+            },
+          }
+        : {}),
     });
   }
   return client;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { HttpError } from '../errors/httpError';
 
 // Unit test: no database. The db/query helpers are mocked so the service's pure
@@ -12,9 +12,11 @@ vi.mock('../db/query', () => ({
 }));
 
 import { query, queryOne, queryMany, withTransaction } from '../db/query';
+import { env } from '../config/env';
 import {
   buildExcerpt,
   avatarKeyToUrl,
+  keyToPublicUrl,
   normalizePagination,
   toPostCard,
   toPostDetail,
@@ -65,13 +67,33 @@ describe('buildExcerpt', () => {
   });
 });
 
-describe('avatarKeyToUrl', () => {
+describe('keyToPublicUrl / avatarKeyToUrl', () => {
+  const original = env.s3PublicBaseUrl;
+  afterEach(() => {
+    env.s3PublicBaseUrl = original;
+  });
+
   it('is null when there is no key', () => {
+    env.s3PublicBaseUrl = 'https://cdn.example.com';
+    expect(keyToPublicUrl(null)).toBeNull();
     expect(avatarKeyToUrl(null)).toBeNull();
   });
 
-  it('is null even for a key until the uploads pass builds URLs', () => {
+  it('is null for a key when no public base URL is configured', () => {
+    env.s3PublicBaseUrl = '';
+    expect(keyToPublicUrl('posts/42.jpg')).toBeNull();
     expect(avatarKeyToUrl('avatars/neo.jpg')).toBeNull();
+  });
+
+  it('joins the base and key when configured', () => {
+    env.s3PublicBaseUrl = 'https://cdn.example.com';
+    expect(keyToPublicUrl('posts/42.jpg')).toBe('https://cdn.example.com/posts/42.jpg');
+    expect(avatarKeyToUrl('avatars/neo.jpg')).toBe('https://cdn.example.com/avatars/neo.jpg');
+  });
+
+  it('tolerates a trailing slash on the base URL', () => {
+    env.s3PublicBaseUrl = 'https://cdn.example.com/';
+    expect(keyToPublicUrl('posts/42.jpg')).toBe('https://cdn.example.com/posts/42.jpg');
   });
 });
 
@@ -127,7 +149,7 @@ describe('toPostCard / toPostDetail', () => {
     });
   });
 
-  it('detail extends the card with content, imageKey, and updatedAt', () => {
+  it('detail extends the card with content, imageKey/imageUrl, and updatedAt', () => {
     const detail = toPostDetail({
       ...sampleCardRow,
       image_key: 'posts/42.jpg',
@@ -138,6 +160,7 @@ describe('toPostCard / toPostDetail', () => {
       id: 42,
       content: 'Camus opens with a short remark.',
       imageKey: 'posts/42.jpg',
+      imageUrl: null, // no S3_PUBLIC_BASE_URL in the test env → unresolved
       updatedAt: '2026-07-15T09:00:00Z',
       likeCount: 0,
       likedByMe: false,
