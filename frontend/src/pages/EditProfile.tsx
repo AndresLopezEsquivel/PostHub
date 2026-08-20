@@ -4,16 +4,18 @@ import { useNavigate } from 'react-router';
 import { isApiError } from '../api/client';
 import { getUserProfile, updateOwnProfile, type UpdateProfileInput } from '../api/users';
 import { useAuth } from '../auth/useAuth';
+import { ImageUploadField, type KeyIntent } from '../components/ImageUploadField';
 import { TextField } from '../components/TextField';
 import { useAsync } from '../hooks/useAsync';
 import styles from './EditProfile.module.css';
 
-// docs/screens.md §9 — Edit profile. Self only (RequireAuth). Fields: bio, email,
-// and an optional new password + confirm. Username is NOT offered — it's immutable,
-// and sending it is a 400 by design. Avatar upload is deferred to pass 9.
+// docs/screens.md §9 — Edit profile. Self only (RequireAuth). Fields: avatar, bio,
+// email, and an optional new password + confirm. Username is NOT offered — it's
+// immutable, and sending it is a 400 by design.
 //
-// Email is prefilled from the session (UserProfile carries no email); bio from the
-// profile. A successful save refreshes the session so a changed email stays current.
+// Email is prefilled from the session (UserProfile carries no email); bio and avatar
+// from the profile. A successful save refreshes the session so a changed email stays
+// current.
 export function EditProfile() {
   const { user } = useAuth();
   // RequireAuth guarantees a user; guard for the type.
@@ -45,7 +47,11 @@ export function EditProfile() {
     <section className={styles.page}>
       <h1>Edit profile</h1>
       {/* Seeded once, so the form is mounted only after the data is in hand. */}
-      <EditProfileForm initialBio={profileState.data.bio ?? ''} initialEmail={user.email} />
+      <EditProfileForm
+        initialBio={profileState.data.bio ?? ''}
+        initialEmail={user.email}
+        initialAvatarUrl={profileState.data.avatarUrl}
+      />
     </section>
   );
 }
@@ -57,9 +63,11 @@ type FieldErrors = Partial<Record<Field, string>>;
 function EditProfileForm({
   initialBio,
   initialEmail,
+  initialAvatarUrl,
 }: {
   initialBio: string;
   initialEmail: string;
+  initialAvatarUrl: string | null;
 }) {
   const { user, refresh } = useAuth();
   const navigate = useNavigate();
@@ -68,6 +76,8 @@ function EditProfileForm({
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [avatarIntent, setAvatarIntent] = useState<KeyIntent>({ kind: 'unchanged' });
+  const [avatarPending, setAvatarPending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -98,6 +108,10 @@ function EditProfileForm({
 
     const body: UpdateProfileInput = { bio, email: email.trim() };
     if (password) body.password = password;
+    // Only send avatarKey when it changed: a key sets it, null clears it; unchanged is
+    // omitted so the stored avatar is preserved.
+    if (avatarIntent.kind === 'set') body.avatarKey = avatarIntent.key;
+    else if (avatarIntent.kind === 'removed') body.avatarKey = null;
 
     setSubmitting(true);
     try {
@@ -124,6 +138,14 @@ function EditProfileForm({
           {formError}
         </p>
       )}
+
+      <ImageUploadField
+        label="Avatar"
+        purpose="avatar"
+        initialUrl={initialAvatarUrl}
+        onChange={setAvatarIntent}
+        onPendingChange={setAvatarPending}
+      />
 
       <div className={styles.field}>
         <label htmlFor="bio" className={styles.label}>
@@ -169,7 +191,7 @@ function EditProfileForm({
       <p className={styles.hint}>Leave the password fields blank to keep your current password.</p>
 
       <div className={styles.actions}>
-        <button type="submit" className={styles.submit} disabled={submitting}>
+        <button type="submit" className={styles.submit} disabled={submitting || avatarPending}>
           {submitting ? 'Saving…' : 'Save'}
         </button>
         <button

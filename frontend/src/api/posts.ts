@@ -70,22 +70,25 @@ export function getPost(id: number, signal?: AbortSignal): Promise<PostDetail> {
 
 // Create/update take category IDS, not the {name,slug} tags a card carries — the
 // edit form maps the post's category slugs back to ids via GET /api/categories.
-// imageKey is intentionally omitted this pass (pass 9): create leaves it null, and
-// a partial PATCH that omits it preserves the stored value, so an edit never drops
-// an image it isn't yet able to show.
+// imageKey is the object key from a completed upload (api/uploads.uploadImage); a
+// string sets/replaces the image, null clears it, and OMITTING it on a PATCH
+// preserves the stored value (so editing other fields never drops an untouched image).
 export interface CreatePostInput {
   title: string;
   content: string;
   categoryIds: number[];
+  imageKey?: string | null;
 }
 
 // Partial by contract, but the edit form always sends title/content/categoryIds
 // (it has them all), so this pass populates every field; the optionality is what
-// keeps it honest with the backend's partial PATCH.
+// keeps it honest with the backend's partial PATCH. imageKey is present only when the
+// image actually changed (see the imageKey omit-to-preserve rule above).
 export interface UpdatePostInput {
   title?: string;
   content?: string;
   categoryIds?: number[];
+  imageKey?: string | null;
 }
 
 export function createPost(input: CreatePostInput): Promise<PostCard> {

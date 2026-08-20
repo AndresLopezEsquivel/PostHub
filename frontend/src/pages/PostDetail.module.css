@@ -59,6 +59,16 @@
   border-color: var(--color-text-muted);
 }
 
+.heroImage {
+  display: block;
+  width: 100%;
+  max-height: 28rem;
+  margin-top: var(--space-4);
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
 /* pre-wrap preserves the author's line breaks; the content is plain text, not
    markdown, so no block formatting beyond that. */
 .body {

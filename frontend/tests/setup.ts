@@ -16,6 +16,9 @@ beforeAll(() => {
   // reaching for the network, and it should fail loudly instead of hanging or
   // quietly returning nothing.
   server.listen({ onUnhandledRequest: 'error' });
+  // jsdom implements neither; ImageUploadField creates/revokes a preview object URL.
+  URL.createObjectURL = () => 'blob:preview';
+  URL.revokeObjectURL = () => {};
 });
 
 // Drop per-test server.use() overrides so tests stay independent — the analogue

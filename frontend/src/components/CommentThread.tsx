@@ -6,6 +6,7 @@ import { type Comment, createComment, deleteComment, listPostComments } from '..
 import { useAuth } from '../auth/useAuth';
 import { useAsync } from '../hooks/useAsync';
 import { formatDate } from '../lib/date';
+import { Avatar } from './Avatar';
 import styles from './CommentThread.module.css';
 
 // The comment thread on Post detail. Self-contained: it owns the paged list, the
@@ -161,6 +162,7 @@ export function CommentThread({ postId }: { postId: number }) {
           {items.map((comment) => (
             <li key={comment.id} className={styles.comment}>
               <p className={styles.meta}>
+                <Avatar url={comment.author.avatarUrl} name={comment.author.username} size="sm" />
                 <Link to={`/users/${comment.author.username}`}>{comment.author.username}</Link>
                 <span aria-hidden="true"> · </span>
                 <time dateTime={comment.createdAt}>{formatDate(comment.createdAt)}</time>

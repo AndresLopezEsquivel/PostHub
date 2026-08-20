@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router';
 import { isApiError } from '../api/client';
 import { listFollowers, listFollowing } from '../api/users';
 import { useAuth } from '../auth/useAuth';
+import { Avatar } from '../components/Avatar';
 import { FollowButton } from '../components/FollowButton';
 import { useAsync } from '../hooks/useAsync';
 import styles from './FollowList.module.css';
@@ -77,11 +78,14 @@ export function FollowList({ tab }: { tab: 'followers' | 'following' }) {
             <ul className={styles.list}>
               {result.data.map((row) => (
                 <li key={row.username} className={styles.row}>
-                  <div className={styles.rowMain}>
-                    <Link to={`/users/${row.username}`} className={styles.rowName}>
-                      {row.username}
-                    </Link>
-                    {row.bio && <p className={styles.rowBio}>{row.bio}</p>}
+                  <div className={styles.rowLeft}>
+                    <Avatar url={row.avatarUrl} name={row.username} size="md" />
+                    <div className={styles.rowMain}>
+                      <Link to={`/users/${row.username}`} className={styles.rowName}>
+                        {row.username}
+                      </Link>
+                      {row.bio && <p className={styles.rowBio}>{row.bio}</p>}
+                    </div>
                   </div>
                   {/* Can't follow yourself — hide the button on your own row. */}
                   {user?.username !== row.username && (

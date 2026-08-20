@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router';
 import { isApiError } from '../api/client';
 import { getUserProfile, listUserPosts } from '../api/users';
 import { useAuth } from '../auth/useAuth';
+import { Avatar } from '../components/Avatar';
 import { FollowButton } from '../components/FollowButton';
 import { PostCardList } from '../components/PostCardList';
 import { useAsync } from '../hooks/useAsync';
@@ -55,7 +56,10 @@ export function Profile() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.username}>{profile.username}</h1>
+        <div className={styles.identity}>
+          <Avatar url={profile.avatarUrl} name={profile.username} size="lg" />
+          <h1 className={styles.username}>{profile.username}</h1>
+        </div>
         {profile.bio && <p className={styles.bio}>{profile.bio}</p>}
         <p className={styles.joined}>Joined {formatDate(profile.createdAt)}</p>
 

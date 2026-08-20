@@ -76,6 +76,7 @@ export const handlers = [
       ...post,
       content: `Full body of ${post.title}.\nSecond line.`,
       imageKey: null,
+      imageUrl: null,
       updatedAt: null,
     });
   }),
@@ -151,6 +152,23 @@ export const handlers = [
 
   // DELETE /api/posts/:postId — 204, no body. (Distinct path from …/like, …/bookmark.)
   http.delete('*/api/posts/:postId', () => new HttpResponse(null, { status: 204 })),
+
+  // POST /api/uploads/presign — mints a fake presigned PUT URL + key. The key prefix
+  // follows `purpose`, like the real service (posts/ vs avatars/).
+  http.post('*/api/uploads/presign', async ({ request }) => {
+    const body = (await request.json()) as { purpose: 'post' | 'avatar'; contentType: string };
+    const prefix = body.purpose === 'avatar' ? 'avatars' : 'posts';
+    const key = `${prefix}/generated.jpg`;
+    return HttpResponse.json({
+      uploadUrl: `https://s3.test/${key}?X-Amz-Signature=sig`,
+      key,
+      expiresIn: 300,
+    });
+  }),
+
+  // The direct-to-S3 PUT the client makes to uploadUrl. MSW matches by URL regardless
+  // of origin, so this intercepts the cross-origin upload the same way — 200, no body.
+  http.put('https://s3.test/*', () => new HttpResponse(null, { status: 200 })),
 
   // GET /api/users/:username — public profile. followerCount 10; followedByMe false
   // by default (the follow test toggles it). userNotFound() overrides for 404.

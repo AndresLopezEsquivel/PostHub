@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import type { BookmarkState } from '../api/bookmarks';
 import type { PostCard as PostCardData } from '../api/posts';
 import { formatDate } from '../lib/date';
+import { Avatar } from './Avatar';
 import { EngagementBar } from './EngagementBar';
 import styles from './PostCard.module.css';
 
@@ -12,8 +13,8 @@ import styles from './PostCard.module.css';
 // state of its own, and every list consumer got the interactive toggle for free.
 // The comment count stays a static label — comment interaction happens on detail.
 //
-// No avatar image: author.avatarUrl is null on every endpoint until pass 9, so
-// rendering an <img> would only ever show a broken source. The author is a link.
+// The author avatar renders through <Avatar>, which falls back to an initial when
+// avatarUrl is null (unconfigured S3 or no avatar), so the card degrades cleanly.
 
 export function PostCard({
   post,
@@ -29,6 +30,7 @@ export function PostCard({
       </h2>
 
       <p className={styles.meta}>
+        <Avatar url={post.author.avatarUrl} name={post.author.username} size="sm" />
         by <Link to={`/users/${post.author.username}`}>{post.author.username}</Link>
         <span aria-hidden="true"> · </span>
         <time dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>

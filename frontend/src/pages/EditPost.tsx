@@ -93,6 +93,7 @@ export function EditPost() {
       <PostForm
         categories={categories}
         initial={{ title: post.title, content: post.content, categoryIds }}
+        imageInitialUrl={post.imageUrl}
         submitLabel="Save changes"
         onSubmit={handleSubmit}
         onCancel={() => void navigate(`/posts/${id}`)}

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { isApiError } from '../api/client';
 import { getPost } from '../api/posts';
 import { useAuth } from '../auth/useAuth';
+import { Avatar } from '../components/Avatar';
 import { CommentThread } from '../components/CommentThread';
 import { DeletePostButton } from '../components/DeletePostButton';
 import { EngagementBar } from '../components/EngagementBar';
@@ -65,6 +66,7 @@ export function PostDetail() {
         <h1 className={styles.title}>{post.title}</h1>
 
         <p className={styles.meta}>
+          <Avatar url={post.author.avatarUrl} name={post.author.username} size="sm" />
           by <Link to={`/users/${post.author.username}`}>{post.author.username}</Link>
           <span aria-hidden="true"> · </span>
           <time dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>
@@ -81,6 +83,10 @@ export function PostDetail() {
               </li>
             ))}
           </ul>
+        )}
+
+        {post.imageUrl && (
+          <img className={styles.heroImage} src={post.imageUrl} alt={post.title} />
         )}
 
         <div className={styles.body}>{post.content}</div>

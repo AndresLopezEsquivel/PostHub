@@ -15,14 +15,14 @@ A **frontend** has landed in `frontend/` (Vite + React + TypeScript + React Rout
 + plain CSS, served by Nginx in production). The shell — routing, the session
 bootstrap, guards, nav, error boundary, and the one fetch wrapper — is real, and
 screens now land one pass at a time in the order under "Screen implementation
-order" below. **Passes 1–8 are done** (Register/Login, Explore, Post detail +
+order" below. **All nine passes are done** (Register/Login, Explore, Post detail +
 comments, like/bookmark toggles, create/edit/delete post, profile + follows, Feed +
-Bookmarks, and Notifications + nav badge); the whole domain UI is built. Only
-**pass 9 (Uploads)** remains. Its backend blocker (§a) is now **resolved**: post
-detail carries a resolved `imageUrl` alongside `imageKey`, and `avatarUrl` resolves
-everywhere via `keyToPublicUrl` against `S3_PUBLIC_BASE_URL` (the CloudFront domain);
-the presign endpoint no longer requires static AWS keys, so it works under an EC2
-instance role. Pass 9 (the upload UI + image rendering) is unblocked.
+Bookmarks, Notifications + nav badge, and Uploads); the frontend is complete. The
+backend §a blocker was resolved first (post detail carries a resolved `imageUrl`
+alongside `imageKey`, and `avatarUrl` resolves everywhere via `keyToPublicUrl` against
+`S3_PUBLIC_BASE_URL`, the CloudFront domain; presign works under an EC2 instance role
+with no static keys), then pass 9 wired the upload UI and image rendering. The uploads
+feature goes live purely by setting the S3 env on the deployed host — no further code.
 
 Design specs (still the authority for *what* to build):
 
@@ -442,8 +442,25 @@ assert against, before those screens. **Pass 0 (scaffold) is done.**
    the presign vars (write): the presign gate relaxed to `S3_BUCKET + AWS_REGION` only,
    and the S3 client omits explicit `credentials` when no static keys are set, letting
    the SDK resolve the instance role — so uploads go live under a role with no keys in
-   `.env`. Both stay dormant/null in local dev. **Frontend still to do:** the upload UI
-   (presign → `PUT` → send `key`) + rendering `imageUrl`/`avatarUrl`.
+   `.env`. Both stay dormant/null in local dev.
+
+   **Frontend (pass 9) — ✅ done.** `api/uploads.ts` owns the two-step flow: `presignUpload`
+   (through the shared `request()`), then `uploadImage(file, purpose)` does the direct,
+   cross-origin S3 `PUT` with a **bare `fetch`** — the one deliberate exception to the
+   single-wrapper rule (the wrapper is `/api`-only/same-origin/cookie-bearing; S3 is a
+   third-party origin authorized by the signed URL), kept isolated so no screen touches
+   S3. A shared **`ImageUploadField`** (upload **on select**, so submit just sends the
+   key; reports a `KeyIntent` of `unchanged`|`set`|`removed`, and pending so the form can
+   block submit) drives both `PostForm` (post image) and `EditProfile` (avatar). The
+   **imageKey/avatarKey intent model** is the pass-5 preserve rule generalized: `set`→the
+   new key, `removed`→`null`, `unchanged`→**omit** the field so a PATCH keeps the stored
+   image. A shared presentational **`Avatar`** (image or initial-in-a-circle fallback,
+   with `onError`) renders at all five sites (card, detail meta, profile header, follow
+   rows, comments); post detail also shows the `imageUrl` hero. Feedback is a simple
+   "Uploading…" pending state (fetch can't stream progress; no percentage bar). Everything
+   degrades to "no image" when S3 is unset, and a client-side type/size guard rejects a bad
+   file before any request. **Deferred (not code):** the NavBar self-avatar — the session
+   shape carries no `avatarUrl`, so it needs a backend field first.
 
 ### Testing
 

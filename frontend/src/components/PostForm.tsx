@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useState } from 'react';
 
 import type { Category } from '../api/categories';
 import { isApiError } from '../api/client';
+import { ImageUploadField, type KeyIntent } from './ImageUploadField';
 import { TextField } from './TextField';
 import styles from './PostForm.module.css';
 
@@ -9,6 +10,9 @@ export interface PostFormValues {
   title: string;
   content: string;
   categoryIds: number[];
+  // Present only when the image changed: a key sets/replaces it, null clears it. Absent
+  // (unchanged) so the caller can omit it from a PATCH and preserve the stored image.
+  imageKey?: string | null;
 }
 
 type FieldErrors = Partial<Record<'title' | 'content' | 'categoryIds', string>>;
@@ -28,6 +32,7 @@ function isFieldKey(field: string): field is (typeof FIELD_KEYS)[number] {
 export function PostForm({
   categories,
   initial,
+  imageInitialUrl,
   submitLabel,
   onSubmit,
   onCancel,
@@ -35,6 +40,7 @@ export function PostForm({
 }: {
   categories: Category[];
   initial?: PostFormValues;
+  imageInitialUrl?: string | null;
   submitLabel: string;
   onSubmit: (values: PostFormValues) => Promise<void>;
   onCancel: () => void;
@@ -43,6 +49,8 @@ export function PostForm({
   const [title, setTitle] = useState(initial?.title ?? '');
   const [content, setContent] = useState(initial?.content ?? '');
   const [selected, setSelected] = useState<Set<number>>(new Set(initial?.categoryIds ?? []));
+  const [imageIntent, setImageIntent] = useState<KeyIntent>({ kind: 'unchanged' });
+  const [imagePending, setImagePending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,9 +81,19 @@ export function PostForm({
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
+    const values: PostFormValues = {
+      title: title.trim(),
+      content: content.trim(),
+      categoryIds: [...selected],
+    };
+    // Only carry imageKey when it actually changed: a new key, or null to clear.
+    // 'unchanged' leaves the property absent so a PATCH preserves the stored image.
+    if (imageIntent.kind === 'set') values.imageKey = imageIntent.key;
+    else if (imageIntent.kind === 'removed') values.imageKey = null;
+
     setSubmitting(true);
     try {
-      await onSubmit({ title: title.trim(), content: content.trim(), categoryIds: [...selected] });
+      await onSubmit(values);
       // On success the caller navigates away; this component unmounts with it.
     } catch (error) {
       if (isApiError(error) && error.field && isFieldKey(error.field)) {
@@ -146,8 +164,16 @@ export function PostForm({
         )}
       </fieldset>
 
+      <ImageUploadField
+        label="Image"
+        purpose="post"
+        initialUrl={imageInitialUrl}
+        onChange={setImageIntent}
+        onPendingChange={setImagePending}
+      />
+
       <div className={styles.actions}>
-        <button type="submit" className={styles.submit} disabled={submitting}>
+        <button type="submit" className={styles.submit} disabled={submitting || imagePending}>
           {submitting ? 'Saving…' : submitLabel}
         </button>
         <button type="button" className={styles.cancel} onClick={onCancel} disabled={submitting}>
