@@ -1,21 +1,22 @@
-# Setting up production (single EC2 + Docker Compose)
+# Setting up production (single EC2 + Docker Compose + RDS)
 
 How to run the **production** build of PostHub on one EC2 instance with the
-Compose stack, terminating TLS at the nginx edge with a self-signed certificate.
+Compose stack, terminating TLS at the nginx edge with a self-signed certificate,
+against a managed **RDS** Postgres database.
 
 This is a manual, single-box deploy meant for a genuine `NODE_ENV=production`
 smoke test — it exercises the real secure-cookie / `trust proxy` /
 `X-Forwarded-Proto` chain that plain HTTP cannot. The only thing that isn't
 production-grade is the certificate's *trust*, which doesn't affect the cookie
-mechanism. See "When it gets real" at the end for the upgrade path.
+mechanism. See "When it gets real" at the end for the remaining upgrade path.
 
 ## How it fits together
 
 ```
-browser ──HTTPS(443)──▶ nginx (web-prod, TLS terminates here)
+browser ──HTTPS(443)──▶ nginx (web, TLS terminates here)
                           ├─ /            → built SPA bundle
                           └─ /api/  ──────▶ api:4000  (Express, internal network)
-                                              └─ db:5432 (Postgres, internal network)
+                                              └──TLS──▶ RDS Postgres (managed, in-VPC)
 ```
 
 - **nginx terminates TLS**, so `$scheme` is `https` and it forwards
@@ -23,26 +24,33 @@ browser ──HTTPS(443)──▶ nginx (web-prod, TLS terminates here)
   `app.ts` sets `trust proxy: 1`, Express derives `req.secure = true`, and
   `express-session` emits the `Secure` `posthub.sid` cookie. Over plain HTTP that
   header would be `http` and the cookie would be silently dropped.
-- **`api` and `db` are not published to the host** in prod — nginx reaches
-  `api:4000` over the internal Compose network, and only `api` talks to `db`.
+- **`api` is not published to the host** — nginx reaches `api:4000` over the
+  internal Compose network. **There is no local `db` container in prod**: the
+  database is RDS, reached over TLS (`DATABASE_SSL=true`).
 - Only **443** faces the internet.
 
-## Files involved
+## Two standalone compose files
+
+`docker-compose.yml` and `docker-compose.prod.yml` are **independent**, not a
+base + override — dev and prod share too little for layering to pay off. Each file
+is the complete truth for its environment; you never combine them.
 
 | File | Role |
 | --- | --- |
-| `docker-compose.yml` | Base + dev default. Creds are `${VAR:-posthub}` so dev stays zero-config. |
-| `docker-compose.prod.yml` | Prod override: `target: production`, `NODE_ENV=production`, no bind mounts, `!reset` strips the dev host ports, mounts the cert + prod nginx config, publishes 443. |
+| `docker-compose.yml` | **Dev only.** Local Postgres, hot-reload bind mounts, host ports, throwaway creds. `docker compose up` — zero config. Not used in prod. |
+| `docker-compose.prod.yml` | **Prod only, self-contained.** `target: production`, `NODE_ENV=production`, no bind mounts, no `db` service, mounts the cert + prod nginx config, publishes 443, RDS via `DATABASE_URL`. Run with `-f docker-compose.prod.yml`. |
 | `frontend/nginx.prod.conf` | TLS-terminating nginx config, mounted over the image's baked-in `nginx.conf` (which stays the plain-`:80`, upstream-TLS variant). |
-| `.env` (git-ignored) | Real `POSTGRES_*` + `SESSION_SECRET`. Copy from `.env.example`. |
+| `.env` (git-ignored) | Real `DATABASE_URL` (RDS) + `SESSION_SECRET` (+ optional S3 vars). Copy from `.env.example`. |
 | `certs/` (git-ignored) | The self-signed `cert.pem` + `key.pem`, generated on the instance. |
 
 ## Prerequisites (once per instance)
 
-- Docker + the Compose plugin (**≥ 2.24**, for the `!reset` / `!override` merge
-  tags), and `openssl`.
-- Security group: allow inbound **22** (SSH) and **443** (HTTPS), scoped to your
-  IP. Port 80 is not used. Do **not** open 4000 or 5432.
+- Docker + the Compose plugin, and `openssl`.
+- An **RDS Postgres** instance in the same VPC as the EC2 box, with a security
+  group that allows inbound **5432 from the EC2 instance's SG only** ("Publicly
+  accessible" off). Note its endpoint, user, password, and database name.
+- EC2 security group: allow inbound **22** (SSH) and **443** (HTTPS), scoped to
+  your IP. Port 80 is not used. Do **not** open 4000.
 - The repo cloned onto the box.
 
 ## Deploy
@@ -51,12 +59,20 @@ browser ──HTTPS(443)──▶ nginx (web-prod, TLS terminates here)
 
 ```bash
 cp .env.example .env
-nano .env        # set a strong POSTGRES_PASSWORD and a long random SESSION_SECRET
-                 # (e.g. `openssl rand -hex 32`)
+nano .env        # set DATABASE_URL to the RDS endpoint and a long random
+                 # SESSION_SECRET (e.g. `openssl rand -hex 32`)
 ```
 
-`.env` is auto-loaded by Compose and is git-ignored. `DATABASE_URL` is derived
-from the `POSTGRES_*` values in the base compose — don't set it here.
+`.env` is auto-loaded by Compose and is git-ignored. In prod you set
+`DATABASE_URL` explicitly (RDS); `DATABASE_SSL=true` is already hardcoded in
+`docker-compose.prod.yml`. The prod file has **no dev fallback** for
+`DATABASE_URL`/`SESSION_SECRET` — a missing value fails the run fast with a clear
+message.
+
+```
+DATABASE_URL=postgresql://<user>:<pass>@<rds-endpoint>:5432/<db>
+SESSION_SECRET=<openssl rand -hex 32>
+```
 
 ### 2. Self-signed certificate
 
@@ -77,21 +93,22 @@ regeneration — but you must reload nginx afterward (see "Restart" below).
 
 ### 3. Build and start
 
-Name the services explicitly — the base file also defines the dev `web` (Vite)
-server, which prod doesn't want:
+The prod file is self-contained, so just name it — no second `-f`, no service
+list:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db api web-prod
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ### 4. Migrate + seed
 
 The production image ships the compiled `dist/` and has no `tsx`, so run the
-compiled entry points (not `npm run migrate`, which invokes `tsx`):
+compiled entry points (not `npm run migrate`, which invokes `tsx`). These run
+against RDS, which starts empty:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api node dist/db/migrate.js
-docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api node dist/db/seed.js
+docker compose -f docker-compose.prod.yml run --rm api node dist/db/migrate.js
+docker compose -f docker-compose.prod.yml run --rm api node dist/db/seed.js
 ```
 
 `migrate` is a deploy step, never a boot step — the server never runs it.
@@ -102,8 +119,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api nod
 
 Browse `https://<EC2_PUBLIC_IP>`, click through the browser's certificate warning
 (expected — the cert is self-signed and has no CA trust), then register/log in.
-If the session sticks across a page reload, the whole secure-cookie chain is
-working.
+If the session sticks across a page reload, the whole secure-cookie chain **and**
+the RDS-backed session store are working. `curl -sk https://<IP>/api/health`
+should report the database OK.
 
 ## Restart / stop-start cycle
 
@@ -113,29 +131,31 @@ cert's SAN. Each time the box comes back up:
 ```bash
 # 1. Regenerate the cert with the new IP (step 2 above)
 # 2. Reload nginx so it picks up the new cert:
-docker compose -f docker-compose.yml -f docker-compose.prod.yml restart web-prod
+docker compose -f docker-compose.prod.yml restart web
 # 3. Re-accept the browser warning (it's a brand-new cert)
 ```
 
-The Postgres data survives in the `posthub_pgdata` volume across restarts, so you
-don't re-migrate/re-seed unless you `docker compose down -v`.
+The Postgres data lives in **RDS**, independent of the EC2 box, so it survives
+instance stop/start with nothing to re-migrate or re-seed.
 
 ## Gotchas
 
 - **No HSTS while self-signed.** Do not add a `Strict-Transport-Security` header:
   once a browser caches it for the host, you can no longer click through the cert
   warning, and it's painful to undo.
-- **`!reset` needs Compose ≥ 2.24.** On an older Compose the dev host ports would
-  merge back in (5432/4000 published) instead of being stripped.
 - **Cert files must exist before `up`.** nginx fails to start if
   `ssl_certificate` points at missing files — generate the cert (step 2) first.
+- **RDS security group must allow the EC2 SG on 5432.** If `api` can't connect,
+  check that inbound rule first; a `connection timeout` in the api logs is almost
+  always the SG.
 - **The committed `nginx.conf` is untouched.** TLS lives only in
-  `nginx.prod.conf`, mounted by the override, so the local `prod-parity` profile
-  still boots certless on `:8080`.
+  `nginx.prod.conf`, mounted by the prod file, so the plain-`:80` variant stays
+  the default for local use.
 
 ## When it gets real
 
-This setup is a smoke test, not a durable production posture. To harden:
+This setup is a smoke test, not a durable production posture. RDS is already in
+place; to harden the rest:
 
 - **Stable address + real cert.** Allocate an **Elastic IP** (survives
   stop/start, so the cert stays valid) and point a domain at it, then issue a
@@ -143,7 +163,7 @@ This setup is a smoke test, not a durable production posture. To harden:
   TLS termination to an **ALB / CloudFront** and revert the edge to the committed
   `nginx.conf` (upstream-TLS) variant, forwarding `X-Forwarded-Proto` from the
   terminator.
-- **Managed database.** Move Postgres to **RDS** (set `DATABASE_SSL=true`), drop
-  the `db` service, and point `DATABASE_URL` at the RDS endpoint.
+- **Tighten RDS.** Turn off "Publicly accessible" if not already, keep automated
+  backups on (retention ≥ 1 day) for anything you'd miss, and consider Multi-AZ.
 - **Secret management.** Keep `.env` off the box where possible (SSM Parameter
   Store / Secrets Manager); never commit a real password — git history is forever.

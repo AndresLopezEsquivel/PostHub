@@ -1,11 +1,22 @@
+# Development stack — the zero-config local default. Just:
+#
+#   docker compose up --build
+#
+# Everything here is self-contained: a throwaway local Postgres, the backend and
+# frontend running with hot-reload bind mounts, and host ports published so you
+# reach the app at http://localhost:5173. This file stands alone — production is a
+# separate, self-contained docker-compose.prod.yml (NOT an override layered on
+# this one), because the two environments share very little.
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      # Interpolated from a git-ignored .env when present (see .env.example);
-      # falls back to the throwaway `posthub` dev creds so local `docker compose
-      # up` needs no .env. docker-compose.prod.yml requires real values via .env.
+      # Throwaway local-dev creds, committed on purpose: they unlock only this
+      # disposable local database, so a new contributor gets a working stack with
+      # zero setup. Never carry these into a deployed environment — prod uses RDS
+      # (see docker-compose.prod.yml). The ${VAR:-posthub} form still lets a
+      # git-ignored .env override them locally if you want.
       POSTGRES_USER: ${POSTGRES_USER:-posthub}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-posthub}
       POSTGRES_DB: ${POSTGRES_DB:-posthub}
@@ -31,18 +42,17 @@ services:
     environment:
       NODE_ENV: development
       PORT: 4000
+      # Derived from the POSTGRES_* values above, pointing at the `db` service on
+      # the compose network — one source of truth for the local creds.
       DATABASE_URL: postgresql://${POSTGRES_USER:-posthub}:${POSTGRES_PASSWORD:-posthub}@db:5432/${POSTGRES_DB:-posthub}
       # Throwaway local-dev secret, committed on purpose — same rationale as the
       # posthub/posthub DB creds above: it signs cookies for a disposable local
-      # session store and unlocks nothing real. The ${SESSION_SECRET:-...} form
-      # lets a git-ignored .env override it for a deployed run (see .env.example);
-      # the literal fallback keeps local `docker compose up` zero-config.
+      # session store and unlocks nothing real. Prod requires a real value (its
+      # own file has no fallback).
       SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-secret}
       # S3 uploads + CloudFront reads. Empty-default ${VAR} forms keep local
       # `docker compose up` zero-config (unset → uploads dormant 503, images null);
-      # a deployed .env lights them up. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are
-      # deliberately NOT wired here — the deployed stack uses an EC2 instance role,
-      # and the container reaches instance metadata directly.
+      # a git-ignored .env lights them up locally if you want to exercise them.
       S3_BUCKET: ${S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
@@ -57,10 +67,10 @@ services:
       target: dev
     volumes:
       - ./frontend:/app
-      # Anonymous volume, same reason as the api service: it keeps the image's
-      # npm-ci'd node_modules from being masked by the host bind mount (the host
-      # has no node_modules — there is no host npm). Renew it with
-      # `--renew-anon-volumes` after changing frontend/package.json.
+      # Anonymous volume: it keeps the image's npm-ci'd node_modules from being
+      # masked by the host bind mount (the host has no node_modules — there is no
+      # host npm). Renew it with `--renew-anon-volumes` after changing
+      # frontend/package.json.
       - /app/node_modules
     ports:
       - "5173:5173"
@@ -72,24 +82,6 @@ services:
       # client bundle, and an API host reachable from client code is exactly what
       # docs/api_design.md forbids.
       API_PROXY_TARGET: http://api:4000
-    depends_on:
-      - api
-
-  # Production-parity check, opt-in:
-  #   docker compose --profile prod-parity up --build web-prod
-  #
-  # Serves the real built bundle through the real nginx.conf on :8080, so the two
-  # things the dev server does differently — SPA history fallback and cache
-  # headers — can be verified before a deploy. Not part of the daily loop.
-  web-prod:
-    profiles: ["prod-parity"]
-    build:
-      context: ./frontend
-      target: production
-    ports:
-      - "8080:80"
-    # Required, not cosmetic: nginx resolves `proxy_pass http://api:4000` once at
-    # startup and exits if the name does not resolve.
     depends_on:
       - api
 

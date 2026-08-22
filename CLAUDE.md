@@ -192,10 +192,13 @@ docker compose up --build          # start web (:5173) + api (:4000) + postgres 
 docker compose up --build -d       # ... detached
 docker compose logs -f api         # watch tsx-watch hot-reload restarts
 docker compose down                # stop; add -v to also wipe the db volume
-
-# Opt-in: the built bundle behind the real nginx.conf, on :8080
-docker compose --profile prod-parity up --build -d web-prod
 ```
+
+`docker-compose.yml` is **dev-only** and self-contained; production is a
+**separate, standalone** `docker-compose.prod.yml` (NOT an override layered on the
+dev file — the two environments share too little), run with
+`docker compose -f docker-compose.prod.yml up -d --build` against a managed RDS
+database. See `docs/set_up_production.md`.
 
 `backend/` is bind-mounted into the `api` container and runs `npm run dev`
 (`tsx watch`), so editing `backend/src/**` hot-reloads without a rebuild;

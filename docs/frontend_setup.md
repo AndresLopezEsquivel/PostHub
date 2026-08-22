@@ -34,11 +34,10 @@ This starts three services:
 | `api` | built from `backend/Dockerfile` (target `dev`) | `4000` | The Express app under `tsx watch` |
 | `db` | `postgres:16-alpine` | `5432` | Postgres |
 
-Plus one opt-in service, not started by default:
-
-| Service | Image | Port | Purpose |
-| --- | --- | --- | --- |
-| `web-prod` | built from `frontend/Dockerfile` (target `production`) | `8080` | The built bundle served by the real `nginx.conf` |
+The built bundle behind the real Nginx lives in the **standalone** production
+stack (`docker-compose.prod.yml`, a separate self-contained file — not an override
+of this one), where the service is named `web` and terminates TLS on `443`. See
+[`set_up_production.md`](./set_up_production.md).
 
 The app needs a schema and some content to be interesting — see
 [Database: migrations and seeds](./backend_setup.md#database-migrations-and-seeds):
@@ -134,19 +133,19 @@ There is no `test:setup` equivalent — the frontend has no database.
 ## Checking production parity
 
 The dev server and Nginx differ in exactly two ways: SPA history fallback and cache headers.
-Both are worth exercising before a deploy:
+Both are exercised by the **standalone production stack** — a separate, self-contained
+`docker-compose.prod.yml` (not an override of this dev file). Bringing it up is the full deploy
+flow (TLS certs + a `DATABASE_URL` pointing at RDS in `.env`); see
+[`set_up_production.md`](./set_up_production.md).
+
+Once it's up on the box, the two Nginx behaviors are verifiable over HTTPS (`-k` accepts the
+self-signed cert):
 
 ```
-docker compose --profile prod-parity up --build -d web-prod
-```
-
-Then:
-
-```
-curl -i  http://localhost:8080/posts/42     # 200 text/html — SPA fallback, not a 404
-curl -i  http://localhost:8080/api/health   # proxied JSON
-curl -sI http://localhost:8080/index.html   | grep -i cache-control   # no-cache
-curl -sI http://localhost:8080/assets/<hashed>.js | grep -i cache-control   # public, max-age=31536000, immutable
+curl -ik https://<host>/posts/42     # 200 text/html — SPA fallback, not a 404
+curl -ik https://<host>/api/health   # proxied JSON
+curl -skI https://<host>/index.html  | grep -i cache-control   # no-cache
+curl -skI https://<host>/assets/<hashed>.js | grep -i cache-control   # public, max-age=31536000, immutable
 ```
 
 `index.html` is the one unhashed file — it names the current asset hashes, so a cached copy would
@@ -154,12 +153,6 @@ boot the previous deploy's bundle. Everything under `/assets/` is fingerprinted 
 cached immutably and a missing one deliberately 404s rather than falling back to `index.html`
 (a missing asset is a broken deploy, and answering it with HTML would bury that under an
 "unexpected token '<'" console error).
-
-Stop it again with:
-
-```
-docker compose --profile prod-parity down
-```
 
 ---
 
@@ -217,19 +210,19 @@ docker compose up --build -d --renew-anon-volumes
 (The same applies to `backend/`. Note Vite's dep-optimization cache lives at `node_modules/.vite`,
 inside that volume — clearing it means renewing the volume, not deleting a host directory.)
 
-**Port already in use.** Something else on the host is bound to `5173` (or `8080` for
-`web-prod`). Stop it, or change the host-side mapping in `docker-compose.yml` — e.g.
-`"5174:5173"`. Change only the left-hand side; `vite.config.ts` sets `strictPort`, so the
-container-side port is fixed.
+**Port already in use.** Something else on the host is bound to `5173`. Stop it, or change the
+host-side mapping in `docker-compose.yml` — e.g. `"5174:5173"`. Change only the left-hand side;
+`vite.config.ts` sets `strictPort`, so the container-side port is fixed.
 
-**`web-prod` exits immediately with `host not found in upstream "api"`.** Nginx resolves
-`proxy_pass http://api:4000` **once at startup** and refuses to start if the name doesn't
-resolve. `depends_on: [api]` covers this under Compose; start the API first. In an orchestrator
-where the backend can be replaced under a stable name, switch to a `resolver` directive plus a
-variable so the name is re-resolved per request (noted in `nginx.conf`).
+**The prod `web` (Nginx) exits immediately with `host not found in upstream "api"`.** Nginx
+resolves `proxy_pass http://api:4000` **once at startup** and refuses to start if the name
+doesn't resolve. `depends_on: [api]` in `docker-compose.prod.yml` covers this; start the API
+first. In an orchestrator where the backend can be replaced under a stable name, switch to a
+`resolver` directive plus a variable so the name is re-resolved per request (noted in
+`nginx.conf`).
 
-**`502 Bad Gateway` from `web-prod` right after starting it.** Nginx is up but the API is still
-booting. Wait a few seconds and retry; check with `docker compose logs api`.
+**`502 Bad Gateway` from the prod `web` (Nginx) right after starting it.** Nginx is up but the
+API is still booting. Wait a few seconds and retry; check with `docker compose logs api`.
 
 **Everything 401s, or logging in appears not to stick.** Confirm the proxy first
 (`curl -i http://localhost:5173/api/health`). If requests are reaching the API but the session
