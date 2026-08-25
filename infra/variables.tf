@@ -17,6 +17,24 @@ variable "uploads_bucket_name" {
   default     = "posthub-uploads-prod"
 }
 
+variable "instance_type" {
+  description = "EC2 instance size for the app server."
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "ssh_public_key_path" {
+  description = <<-EOT
+    Path to the PUBLIC half of the SSH key used to reach the app server. Only
+    this half is uploaded to AWS; the private key never leaves your machine.
+    Generate one if you have none:
+
+      ssh-keygen -t ed25519 -C "posthub"
+  EOT
+  type        = string
+  default     = "~/.ssh/id_ed25519.pub"
+}
+
 variable "ssh_allowed_cidr" {
   description = <<-EOT
     CIDR block allowed to SSH into the app server. The default opens port 22 to

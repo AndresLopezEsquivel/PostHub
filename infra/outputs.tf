@@ -8,6 +8,16 @@ output "uploads_bucket" {
   value       = aws_s3_bucket.uploads.id
 }
 
+output "app_public_ip" {
+  description = "Public IP of the app server. The frontend origin is https://<this value>."
+  value       = aws_instance.app.public_ip
+}
+
+output "app_ssh" {
+  description = "Ready-made SSH command for the app server."
+  value       = "ssh ubuntu@${aws_instance.app.public_ip}"
+}
+
 output "cloudfront_domain" {
   description = <<-EOT
     Public hostname serving the uploads bucket. The backend resolves stored
