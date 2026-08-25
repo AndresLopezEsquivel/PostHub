@@ -1,0 +1,17 @@
+# Outputs — the values you need to configure the deployed app.
+#
+# Print them any time with `terraform output`, or one with
+# `terraform output -raw cloudfront_domain`.
+
+output "uploads_bucket" {
+  description = "S3 bucket holding uploads. Set as S3_BUCKET in the backend env."
+  value       = aws_s3_bucket.uploads.id
+}
+
+output "cloudfront_domain" {
+  description = <<-EOT
+    Public hostname serving the uploads bucket. The backend resolves stored
+    object keys against this — set S3_PUBLIC_BASE_URL to https://<this value>.
+  EOT
+  value       = aws_cloudfront_distribution.uploads.domain_name
+}
