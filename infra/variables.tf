@@ -16,3 +16,15 @@ variable "uploads_bucket_name" {
   type        = string
   default     = "posthub-uploads-prod"
 }
+
+variable "ssh_allowed_cidr" {
+  description = <<-EOT
+    CIDR block allowed to SSH into the app server. The default opens port 22 to
+    the whole internet, which is convenient on a dynamic home IP but means the
+    box is continuously probed by bots. Narrow it to your own address with:
+
+      terraform apply -var "ssh_allowed_cidr=$(curl -s ifconfig.me)/32"
+  EOT
+  type        = string
+  default     = "0.0.0.0/0"
+}
