@@ -17,6 +17,51 @@ variable "uploads_bucket_name" {
   default     = "posthub-uploads-prod"
 }
 
+variable "db_instance_class" {
+  description = "RDS instance size. db.t3.micro and db.t4g.micro are free-tier eligible."
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_backup_retention_days" {
+  description = <<-EOT
+    Days of automated RDS backups to keep. Free-tier accounts reject anything
+    above their cap with a FreeTierRestrictionError, so this defaults to 1 —
+    a daily backup, retained a day. Raise it (7 is a reasonable production
+    value) once the account is on a paid plan. 0 disables backups entirely.
+  EOT
+  type        = number
+  default     = 1
+}
+
+variable "db_name" {
+  description = "Name of the database created inside the RDS instance."
+  type        = string
+  default     = "posthub"
+}
+
+variable "db_username" {
+  description = "Master username for the RDS instance."
+  type        = string
+  default     = "posthub"
+}
+
+variable "db_password" {
+  description = <<-EOT
+    Master password for the RDS instance. Deliberately has no default, so
+    Terraform prompts for it rather than anything weak being committed. Supply
+    it without an interactive prompt by exporting it instead:
+
+      export TF_VAR_db_password='...'
+
+    Note this value is written to terraform.tfstate in plaintext — which is why
+    the state file is gitignored. Managing it in Secrets Manager is the proper
+    fix, deferred for now.
+  EOT
+  type        = string
+  sensitive   = true
+}
+
 variable "instance_type" {
   description = "EC2 instance size for the app server."
   type        = string

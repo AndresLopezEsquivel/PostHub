@@ -18,6 +18,15 @@ output "app_ssh" {
   value       = "ssh ubuntu@${aws_instance.app.public_ip}"
 }
 
+output "db_endpoint" {
+  description = <<-EOT
+    Host:port of the database. Build the backend's DATABASE_URL from it:
+    postgres://<user>:<password>@<this value>/<db_name>?sslmode=require
+    The password is left out on purpose so this output stays safe to print.
+  EOT
+  value       = aws_db_instance.postgres.endpoint
+}
+
 output "cloudfront_domain" {
   description = <<-EOT
     Public hostname serving the uploads bucket. The backend resolves stored
