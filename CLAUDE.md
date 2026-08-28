@@ -24,6 +24,12 @@ alongside `imageKey`, and `avatarUrl` resolves everywhere via `keyToPublicUrl` a
 with no static keys), then pass 9 wired the upload UI and image rendering. The uploads
 feature goes live purely by setting the S3 env on the deployed host — no further code.
 
+The AWS infrastructure both run on is now **Terraform** in `infra/` — the private
+uploads bucket behind CloudFront, the EC2 instance role, the security groups, the
+app server, and the RDS database — so the whole stack is reproducible from an
+empty account instead of clicked together in the console (see "Infrastructure"
+below).
+
 Design specs (still the authority for *what* to build):
 
 - `docs/screens.md` — screen inventory (data shown, actions, states, access per screen) + the route table
@@ -78,8 +84,8 @@ Conventions baked into the scaffold:
 The schema lives in `backend/migrations/*.sql` (plain SQL, transcribed from
 `docs/database_design.md`) and is applied by a small forward-only runner
 (`src/db/migrate.ts`, `npm run migrate`) that records applied files in a
-`schema_migrations` ledger. `src/db/` holds the query layer; no controllers or
-services exist yet. Conventions to preserve:
+`schema_migrations` ledger. `src/db/` holds the query layer every service above
+it goes through. Conventions to preserve:
 
 - **Migrations are additive-only.** A schema change is a *new* numbered file,
   never an edit to one already applied — the runner skips anything in the ledger,
@@ -217,15 +223,14 @@ hardcoded on purpose: they unlock only a disposable local database, so a new
 contributor gets a working stack with zero setup. This is fine *only* because
 nothing real is behind them.
 
-> **When deployment gets real:** do not carry this pattern forward. The moment
-> the stack points at a database with real data or runs in a deployed
-> environment, move credentials out of the committed `docker-compose.yml` into a
-> git-ignored root `.env` (Compose auto-loads it) referenced via
-> `${POSTGRES_PASSWORD:-posthub}`-style substitution, with a committed
-> `.env.example` documenting the keys. Never commit a real password — git
-> history is forever. Note this root Compose `.env` is a *different* scope from
-> `backend/.env` (which `dotenv` loads inside the Node process); don't conflate
-> the two.
+> **For deployed environments this has already been done — keep it that way.**
+> `docker-compose.yml` reads `${POSTGRES_PASSWORD:-posthub}`-style substitutions,
+> the root `.env` holding the real values is git-ignored (Compose auto-loads it),
+> and a committed `.env.example` documents every key. Never commit a real
+> password — git history is forever. Note this root Compose `.env` is a
+> *different* scope from `backend/.env` (which `dotenv` loads inside the Node
+> process); don't conflate the two. Secrets AWS itself needs — the RDS master
+> password — are handled in `infra/`, described below.
 
 ### Testing
 
@@ -265,8 +270,10 @@ Conventions to preserve:
 ## Frontend
 
 Lives in `frontend/` (Vite + React 19 + TypeScript + React Router + plain CSS).
-Currently a **scaffold**: the shell works end to end, every screen is a
-placeholder. Layout mirrors the backend's so the correspondence is legible:
+**Complete**: the shell — routing, session bootstrap, guards, nav, error
+boundary, and the one fetch wrapper — plus all nine screen passes (see "Screen
+implementation order" below). Layout mirrors the backend's so the correspondence
+is legible:
 
 | Frontend | Backend twin |
 | --- | --- |
@@ -484,6 +491,75 @@ docker compose exec web npm run typecheck    # tsc --noEmit; Vite owns the build
 
 Same rule as the backend: don't pad with unit tests that only assert a URL string
 was built — for thin pass-throughs the integration test is the one that matters.
+
+## Infrastructure
+
+Lives in `infra/` (Terraform, AWS provider `~> 6.0`). Every AWS resource the
+production stack runs on is code: `terraform apply` builds it from an empty
+account, `terraform destroy` removes it again. This replaced a
+click-through-the-console setup, so **the console is no longer the source of
+truth — these files are.** `infra/README.md` is the operator's guide
+(prerequisites, apply flow, the variables table, outputs → `.env` mapping,
+teardown gotchas, and a "deliberate shortcuts" table naming every trade-off and
+its fix); don't duplicate it here.
+
+One file per resource group, the same one-concern-per-file discipline as the
+backend's routers:
+
+| File | Creates |
+| --- | --- |
+| `providers.tf` | Terraform + AWS provider pins, region |
+| `variables.tf` / `outputs.tf` | Inputs, and the values the app's `.env` needs |
+| `s3.tf` | Private uploads bucket + public-access block |
+| `cloudfront.tf` | OAC, distribution, and the bucket policy trusting only it |
+| `iam.tf` | EC2 instance role, its `s3:PutObject` policy, instance profile |
+| `network.tf` | App and database security groups |
+| `ec2.tf` | SSH key pair and the app server |
+| `s3_cors.tf` | Bucket CORS, allowing browser `PUT` from the app's origin |
+| `rds.tf` | Subnet group and the Postgres instance |
+
+Conventions to preserve:
+
+- **Nothing secret is ever committed.** `infra/.gitignore` is GitHub's canonical
+  `Terraform.gitignore`, covering `*.tfstate`, `*.tfvars`, and `.terraform/`.
+  State matters most: it holds the RDS master password **in plaintext**. The one
+  Terraform file that *is* committed is `.terraform.lock.hcl` — the provider
+  checksum lock, the `package-lock.json` analog, not a secret.
+- **No static AWS credentials anywhere**, at either layer. Terraform resolves
+  short-lived credentials exactly as the CLI does (`aws login`, a 12-hour browser
+  session — no key to leak or rotate), and the deployed backend signs upload URLs
+  with credentials the SDK reads from **instance metadata** via
+  `aws_iam_instance_profile.app`. That is why `AWS_ACCESS_KEY_ID` /
+  `AWS_SECRET_ACCESS_KEY` are absent from the production `.env`, and must stay
+  absent.
+- **The DB password is a `sensitive` variable with no default**, supplied through
+  `TF_VAR_db_password` or an interactive prompt. `sensitive` redacts it from
+  terminal output and logs, *not* from state on disk — which is what makes the
+  gitignore point above load-bearing. Moving it to Secrets Manager
+  (`manage_master_user_password`) is the known fix, deliberately deferred.
+- **The bucket is private and stays private.** Reads go through CloudFront,
+  authenticated by an Origin Access Control scoped to that one distribution;
+  writes are presigned `PUT`s straight from the browser. The bucket policy's
+  `AWS:SourceArn` condition is what prevents the confused-deputy problem — don't
+  loosen it. The origin must use `bucket_regional_domain_name`, never
+  `bucket_domain_name`, which redirects and silently breaks SigV4 signing.
+- **Terraform orders itself from references; never sequence by hand.** The only
+  ordering this config declares is `s3_cors.tf` reading
+  `aws_instance.app.public_ip` — which is precisely why CORS is a separate
+  resource from the bucket, in its own file. Reach for `depends_on` only when a
+  dependency genuinely can't be expressed as a reference (the bucket policy →
+  public-access-block pair is the one such case).
+- **Free-tier limits are checked by AWS at call time, not at plan time**, so a
+  clean `plan` can still fail on `apply` (it has, twice: instance type and backup
+  retention). `db_backup_retention_days` and `instance_type` exist as variables
+  for that reason.
+- **State is local and unlocked.** One operator, one machine. Losing it means
+  Terraform forgets these resources exist and tries to recreate them; an S3
+  backend with locking is the first thing to add if anyone else ever applies this.
+
+Terraform owns the **infrastructure**; `docs/set_up_production.md` still owns the
+**deploy** onto it — clone, write `.env` from `terraform output`, generate the
+self-signed cert, bring up `docker-compose.prod.yml`, migrate, seed.
 
 ## Architecture
 
