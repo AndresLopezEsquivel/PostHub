@@ -106,3 +106,47 @@ docker build --target production -t posthub-web-production .
 * Copies the compiled JavaScript files from the `build` stage to the image's filesystem at `/usr/share/nginx/html`.
 * Via `EXPOSE 80`, documents that the container listens on port 80 at runtime.
 * Runs `nginx -g 'daemon off;'` to start the production version of PostHub's frontend web application.
+
+### Docker Compose
+
+* Since PostHub is a multi-container application, it uses Docker Compose.
+* PostHub defines two Compose files: `docker-compose.yml` and `docker-compose.prod.yml`.
+
+#### `docker-compose.yml`:
+
+* For development purposes.
+* Defines three services: `api`, `web`, and `db`.
+* `web` depends on `api`, and `api` depends on `db`.
+* Defines a named volume `posthub-pgdata` for persisting PostgreSQL database data.
+
+##### `db` service:
+
+* Uses `postgres:16-alpine` image.
+* Restarts automatically unless stopped or removed.
+* Sets environment variables for PostgreSQL database configuration:
+  * `POSTGRES_USER=posthub`
+  * `POSTGRES_PASSWORD=posthub`
+  * `POSTGRES_DB=posthub`
+* Mounts named volume `posthub-pgdata` to container's `/var/lib/postgresql/data`.
+* Publishes container's port 5432 to the host machine so that the PostgreSQL database can be accessed from outside the container.
+* Defines a health check to ensure that the PostgreSQL database is ready to accept connections.
+
+##### `api` service:
+
+* Builds the backend API server from `backend/Dockerfile` using the `dev` stage.
+* Depends on a healthy `db` service.
+* Enables hot reloading:
+  * Mounts the entire PostHub source code (`backend/`) to the container's `/app` directory.
+  * Mounts the `node_modules` directory from the `deps` stage.
+* Publishes container's port 4000 to the host machine so that the backend API server can be accessed from outside the container.
+* Defines environment variables (e.g., `NODE_ENV=development`, `DATABASE_URL=postgresql://posthub:posthub@db:5432/posthub`).
+
+##### `web` service:
+
+* Builds the frontend web application from `frontend/Dockerfile` using the `dev` stage.
+* Depends on a `api` service.
+* Enables hot reloading:
+  * Mounts the entire PostHub frontend source code (`frontend/`) to the container's `/app` directory.
+  * Mounts the `node_modules` directory from the `deps` stage.
+* Publishes container's port 5173 to the host machine so that the frontend web application can be accessed from outside the container.
+* Defines environment variable `API_PROXY_TARGET=http://api:4000` to proxy API requests to the backend API server. We're in development mode, so the frontend web application is served by Vite development server, which proxies API requests to the backend API server.
