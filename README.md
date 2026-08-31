@@ -150,3 +150,23 @@ docker build --target production -t posthub-web-production .
   * Mounts the `node_modules` directory from the `deps` stage.
 * Publishes container's port 5173 to the host machine so that the frontend web application can be accessed from outside the container.
 * Defines environment variable `API_PROXY_TARGET=http://api:4000` to proxy API requests to the backend API server. We're in development mode, so the frontend web application is served by Vite development server, which proxies API requests to the backend API server.
+
+#### `docker-compose.prod.yml`
+
+* For production purposes.
+* Defines two services: `api` and `web`.
+    * `web` depends on `api`.
+    * A `db` service is not defined because the production PostgreSQL database is managed by AWS RDS.
+
+##### `api` service:
+
+* Builds the backend API server from `backend/Dockerfile` using the `production` stage.
+* Defines all necessary environment variables for the backend API server to work properly (database connection, cookie session secret, etc.).
+* Doesn't mount any volumes for hot reloading because we're in production mode.
+* Doesn't publish any ports to the host machine. Nginx reaches the backend API server at port 4000 via the internal Docker network.
+
+##### `web` service:
+
+* Builds the frontend web application from `frontend/Dockerfile` using the `production` stage.
+* Publishes container's port 443 to the host machine so that the frontend web application can be accessed from outside the container.
+* Doesn't mount any volumes for hot reloading because we're in production mode.
