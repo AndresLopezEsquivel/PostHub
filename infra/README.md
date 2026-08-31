@@ -60,20 +60,17 @@ Two design points carried over from the app's own conventions:
   production `.env`. Presigning is a local computation; the instance role is
   what makes the resulting URL valid.
 
-## Prerequisites
+### Prerequisites
 
-- **Terraform** ≥ 1.5 and the **AWS CLI** v2 on your machine.
-- An **SSH key pair**. The config uploads the public half; generate one if you
-  have none: `ssh-keygen -t ed25519 -C "posthub"`.
-- AWS credentials the provider can resolve. It reads them exactly as the CLI
-  does, and this config deliberately hardcodes no profile or key, so any of the
-  usual mechanisms work. A short-lived browser sign-in avoids static keys
-  entirely:
+* **Terraform** ≥ 1.5 and the **AWS CLI** v2.
+* An SSH key pair for the EC2 instance.
+    * `ec2.tf` uploads the public key to AWS.
+* AWS credentials the Terraform's AWS provider can use to create and manage AWS resources. To avoid long-lived secrets on disk, check out [Login with console credentials](https://docs.aws.amazon.com/signin/latest/userguide/command-line-sign-in.html#command-line-sign-in-local-development).
 
-  ```bash
-  aws login                      # 12-hour session, no access keys to leak
-  aws sts get-caller-identity    # confirm before applying
-  ```
+```bash
+aws login                      # 12-hour session, no access keys to leak
+aws sts get-caller-identity    # confirm before using Terraform apply
+```
 
 ## Applying
 
@@ -89,34 +86,24 @@ RDS. Nothing is hanging.
 
 ## Variables
 
-All have working defaults except the database password.
-
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `aws_region` | `us-east-1` | |
-| `uploads_bucket_name` | `posthub-uploads-prod` | S3 names are unique across **all** AWS accounts — change this if it's taken |
+| `uploads_bucket_name` | `posthub-uploads-prod` | S3 names are unique across **all** AWS accounts. Change it if it's taken. |
 | `instance_type` | `t3.micro` | |
 | `ssh_public_key_path` | `~/.ssh/id_ed25519.pub` | Only the public half is uploaded |
-| `ssh_allowed_cidr` | `0.0.0.0/0` | Port 22 open to the internet. Narrow it — see below |
+| `ssh_allowed_cidr` | `0.0.0.0/0` | Port 22 open to the internet. Narrow it. See below for how to do it. |
 | `db_instance_class` | `db.t3.micro` | |
 | `db_name` / `db_username` | `posthub` | |
-| `db_password` | **none** | Prompted, or via `TF_VAR_db_password` |
+| `db_password` | **none** | Prompted, or via `TF_VAR_db_password` environment variable |
 | `db_backup_retention_days` | `1` | Free-tier accounts reject larger values |
 
-Override per-run with `-var`, or put them in a `terraform.tfvars` (gitignored):
+Before creating/updating resources via `terraform apply`, be aware that, by default, the EC2 instance's security group leaves port 22 open to the internet (SSH connections are allowed from anywhere). Restrict it to your IP only:
 
 ```bash
 terraform apply -var "ssh_allowed_cidr=$(curl -s ifconfig.me)/32"
 ```
-
-**Free tier:** which instance types your account allows is an account-level
-entitlement AWS only checks when it receives the request — so a clean `plan` can
-still fail on `apply`. List what's permitted with:
-
-```bash
-aws ec2 describe-instance-types --filters "Name=free-tier-eligible,Values=true" \
-  --query 'InstanceTypes[].InstanceType' --output text
-```
+These Terraform configuration files create a t3.micro by default. Override it if needed.
 
 ## Outputs → app configuration
 
