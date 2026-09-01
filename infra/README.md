@@ -60,7 +60,7 @@ Two design points carried over from the app's own conventions:
   production `.env`. Presigning is a local computation; the instance role is
   what makes the resulting URL valid.
 
-### Prerequisites
+## Prerequisites
 
 * **Terraform** ≥ 1.5 and the **AWS CLI** v2.
 * An SSH key pair for the EC2 instance.
@@ -84,32 +84,11 @@ terraform apply
 The first apply takes roughly **10–15 minutes**, nearly all of it CloudFront and
 RDS. Nothing is hanging.
 
-## Variables
 
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `aws_region` | `us-east-1` | |
-| `uploads_bucket_name` | `posthub-uploads-prod` | S3 names are unique across **all** AWS accounts. Change it if it's taken. |
-| `instance_type` | `t3.micro` | |
-| `ssh_public_key_path` | `~/.ssh/id_ed25519.pub` | Only the public half is uploaded |
-| `ssh_allowed_cidr` | `0.0.0.0/0` | Port 22 open to the internet. Narrow it. See below for how to do it. |
-| `db_instance_class` | `db.t3.micro` | |
-| `db_name` / `db_username` | `posthub` | |
-| `db_password` | **none** | Prompted, or via `TF_VAR_db_password` environment variable |
-| `db_backup_retention_days` | `1` | Free-tier accounts reject larger values |
+## Outputs
 
-Before creating/updating resources via `terraform apply`, be aware that, by default, the EC2 instance's security group leaves port 22 open to the internet (SSH connections are allowed from anywhere). Restrict it to your IP only:
+After using `terraform apply`, use `terraform output` to see the values required to configure the app.
 
-```bash
-terraform apply -var "ssh_allowed_cidr=$(curl -s ifconfig.me)/32"
-```
-These Terraform configuration files create a t3.micro by default. Override it if needed.
-
-## Outputs → app configuration
-
-```bash
-terraform output
-```
 
 | Output | Goes into the production `.env` as |
 | --- | --- |
@@ -183,3 +162,36 @@ oversight — and each is a small change when it stops being acceptable:
 | SSH open to `0.0.0.0/0` | Home IPs move; locking yourself out mid-project is worse | `ssh_allowed_cidr`, or SSM Session Manager and no port 22 at all |
 | Local state | One operator, one machine | S3 backend + DynamoDB lock |
 | `AdministratorAccess` on the Terraform user | Learning the tool, not IAM | Scope to the services actually used |
+
+## Explaining the config files one by one
+
+### `variables.tf`
+
+To know more about how to define variables, check out Terraform's [Define variables](https://developer.hashicorp.com/terraform/language/values/variables). Variables let users pass custom values to Terraform modules at runtime. PostHub defines the following variables:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `aws_region` | `us-east-1` | |
+| `uploads_bucket_name` | `posthub-uploads-prod` | S3 names are unique across **all** AWS accounts. Change it if it's taken. |
+| `instance_type` | `t3.micro` | |
+| `ssh_public_key_path` | `~/.ssh/id_ed25519.pub` | Only the public half is uploaded |
+| `ssh_allowed_cidr` | `0.0.0.0/0` | Port 22 open to the internet. Narrow it. See below for how to do it. |
+| `db_instance_class` | `db.t3.micro` | |
+| `db_name` / `db_username` | `posthub` | |
+| `db_password` | **none** | Prompted, or via `TF_VAR_db_password` environment variable |
+| `db_backup_retention_days` | `1` | Free-tier accounts reject larger values |
+
+Before creating/updating resources via `terraform apply`, be aware that, by default, the EC2 instance's security group leaves port 22 open to the internet (SSH connections are allowed from anywhere). Restrict it to your IP only:
+
+```bash
+terraform apply -var "ssh_allowed_cidr=$(curl -s ifconfig.me)/32"
+```
+These Terraform configuration files create a t3.micro by default. Override it if needed.
+
+### `providers.tf`
+
+To know more about how to configure providers, check out Terraform's [Configure providers](https://developer.hashicorp.com/terraform/language/providers/requirements).
+
+Check out the official AWS provider documentation here: [AWS provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs).
+
+`providers.tf` doesn't contain any credentials or create any AWS infrastructure. This file tells Terraform what it needs before touching AWS: a Terraform CLI of version 1.5 or newer, and the official `harshicorp/aws` provider of version `~> 6.0`. It also configures the provider to use the `aws_region` variable defined in `variables.tf`, which defaults to `us-east-1`. This file is the setup layer `terraform init` reads to download plugins.
