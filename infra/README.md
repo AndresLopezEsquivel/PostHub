@@ -190,8 +190,60 @@ These Terraform configuration files create a t3.micro by default. Override it if
 
 ### `providers.tf`
 
-To know more about how to configure providers, check out Terraform's [Configure providers](https://developer.hashicorp.com/terraform/language/providers/requirements).
+`providers.tf` doesn't contain any credentials or provision any AWS infrastructure. This file tells Terraform what it needs before touching AWS: a Terraform CLI of version 1.5 or newer, and the official `harshicorp/aws` provider of version `~> 6.0`. It also configures the provider to use the `aws_region` variable defined in `variables.tf`, which defaults to `us-east-1`. This file is the setup layer `terraform init` reads to download plugins.
 
-Check out the official AWS provider documentation here: [AWS provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs).
+Resources to dive deeper into:
 
-`providers.tf` doesn't contain any credentials or create any AWS infrastructure. This file tells Terraform what it needs before touching AWS: a Terraform CLI of version 1.5 or newer, and the official `harshicorp/aws` provider of version `~> 6.0`. It also configures the provider to use the `aws_region` variable defined in `variables.tf`, which defaults to `us-east-1`. This file is the setup layer `terraform init` reads to download plugins.
+* [Configure providers](https://developer.hashicorp.com/terraform/language/providers/requirements).
+* [AWS provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs).
+
+### `s3.tf`
+
+Before describing what `s3.tf` does, a few notes on PostHub's S3 usage:
+
+* PostHub keeps user-uploaded images (post pictures and profile avatars) in a private S3 bucket that nobody can browse or read directly.
+* To show an image, requests go through a CDN (CloudFront), which is the only reader the bucket trusts. The browser loads a normal image URL from there, and the CDN fetches it from storage behind the scenes.
+* To upload an image, the browser asks the PostHub API for a presigned URL. The image bytes never pass through PostHub's own server. All the server ever handles is a short, meaningless filename it made up, which it stores in the database and later turns back into a CDN link when rendering a page.
+* PostHub's server can create those pre-signed URLs because the EC2 instance it runs on carries an IAM role allowed to do exactly one thing and nothing else: write objects to the S3 bucket. It can't read, list, or delete anything, and there are no passwords or access keys stored anywhere in the app.
+
+Given this context, `s3.tf`:
+
+* Creates the S3 bucket where every uploaded image will live.
+* Configures the S3 bucket to be private and inaccessible to the public.
+
+CloudFront being allowed to read from the bucket, and the app server being allowed to write to the bucket, are handled in later configuration files.
+
+Bucket names are globally unique across all AWS accounts. If `posthub-uploads-prod` is already taken, override it:
+
+```bash
+terraform apply -var 'uploads_bucket_name=posthub-uploads-yourname'
+```
+
+To verify the bucket was created, run:
+
+```bash
+aws s3 ls | grep posthub-uploads
+````
+
+To verify the bucket is private, run:
+
+```bash
+aws s3api get-public-access-block --bucket posthub-uploads-yourname
+````
+
+All four keys should come back `true`:
+
+```json
+{
+  "PublicAccessBlockConfiguration": {
+    "BlockPublicAcls": true,
+    "IgnorePublicAcls": true,
+    "BlockPublicPolicy": true,
+    "RestrictPublicBuckets": true
+  }
+}
+```
+
+Resources to dive deeper into:
+* [`aws_s3_bucket`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket)
+* [`aws_s3_bucket_public_access_block`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block)
