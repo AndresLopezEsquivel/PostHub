@@ -247,3 +247,59 @@ All four keys should come back `true`:
 Resources to dive deeper into:
 * [`aws_s3_bucket`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket)
 * [`aws_s3_bucket_public_access_block`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block)
+
+### `cloudfront.tf`
+
+Before describing what `cloudfront.tf` does, a few concepts we need to understand:
+
+
+Origin Access Control (OAC):
+* Replaces the older Origin Access Identity (OAI).
+* Is one of the ways CloudFront can send authenticated requests to an S3 origin.
+
+**Bucket policy:**
+* `data.aws_iam_policy_document.uploads_cloudfront_read` is a data block (doesn't provision infrastructure) that generates an IAM policy in JSON format that we'll attach to the S3 bucket via `aws_s3_bucket_policy`.
+* The generated JSON represents a resource-based, inline policy.
+* Resource-based policies are attached to a resource (e.g., an S3 bucket, SQS queues, Amazon DynamoDB tables) and you can specify who has access to the resource and what actions they can perform on it.
+* The `data.aws_iam_policy_document.uploads_cloudfront_read` policy grants permission to retrieve objects from Amazon S3 (`s3:GetObject`). This policy is scoped to the objects in the S3 bucket (`resources = ["${aws_s3_bucket.uploads.arn}/*"]`). A principal identifies who can access the resources. Principals can include accounts, users, roles, federated users, or AWS services. In this case, the principal is the CloudFront service (`cloudfront.amazonaws.com`). However, the principal `cloudfront.amazonaws.com` is the CloudFront service itself, and CloudFront accesses S3 to serve a specific distribution's request. When CloudFront calls `s3:GetObject`, there's always a distribution behind that call. That's why the policy adds a condition to restrict access to only the specific distribution we created (`aws_cloudfront_distribution.uploads.arn`). This condition is specified using `aws:SourceArn`, which identifies the ARN of the resource (the CloudFront distribution) that caused the service principal (CloudFront) to make the request. Without it, CloudFront remains as the principal, but any distribution could retrieve objects from the bucket.
+* `aws_s3_bucket_policy.uploads` attaches the resource-based policy to the uploads bucket. Its policy is the rendered JSON of `data.aws_iam_policy_document.uploads_cloudfront_read`. Note that `depends_on` declares an explicit dependency Terraform can't infer automatically. The S3 bucket public-access block must settle before the bucket policy is applied.
+
+Resources for a deeper dive into IAM policies:
+
+* [`aws_iam_policy_document`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document)
+* [`aws_s3_bucket_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy)
+* [Identity-based policies and resource-based policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_identity-vs-resource.html)
+* [Managed policies and inline policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
+* [AWS global condition context keys (for `aws:SourceArn`)](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html#condition-keys-sourcearn)
+* [Actions, resources, and condition keys for Amazon S3 (for `s3:GetObject`)](https://docs.aws.amazon.com/service-authorization/latest/reference/list_s3.html#list_s3-action-GetObject)
+* [AWS JSON policy elements: Principal](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html)
+* [`depends_on`](https://developer.hashicorp.com/terraform/language/meta-arguments/depends_on)
+
+Ideas:
+* The S3 bucket is private.
+* The browser cannot fetch an object from S3 directly.
+* CloudFront sits in front of the bucket and is the only reader.
+* browser -> CloudFront (public HTTPS) -> OAC-signed request -> S3 bucket.
+* The S3 bucket policy is configured to allow only the CloudFront distribution.
+* Your S3 bucket policy grants access only to your specific distribution, using a condition on AWS:SourceArn (the distribution's ARN)
+* CloudFront signs every request to your S3 bucket using AWS Signature Version 4 (SigV4).
+* cloudfront.tf creates three things: an Origin Access Control (OAC), a CloudFront distribution, and a bucket policy that allows the OAC to read from the S3 bucket.
+* The bucket policy lives in `cloudfront.tf` because it depends on the distribution.
+* We're using a resource-based policy on the bucket.
+* The bucket policy restricts to only the CloudFront distribution we created, not any other distribution. This is done by using a condition on AWS:SourceArn (the distribution's ARN) in the bucket policy.
+* What's a service principal?
+* What's CloudFront domain?
+* What's Origin Access Control (OAC)?
+* What's a CloudFront distribution?
+* What's SigV4?
+* What's a signing behavior?
+* Three pieces: OAC, distribution, and the bucket policy.
+
+Resources to dive deeper into:
+* [What is Amazon CloudFront?](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html)
+* [Get started with a CloudFront standard distribution](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
+* [Restrict access to an Amazon S3 origin](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html)
+* [Use managed cache policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)
+* [`aws_cloudfront_origin_access_control`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_access_control)
+* [`aws_cloudfront_cache_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/cloudfront_cache_policy)
+* [`aws_cloudfront_distribution`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution)
