@@ -253,9 +253,15 @@ Resources to dive deeper into:
 Before describing what `cloudfront.tf` does, a few concepts we need to understand:
 
 
-Origin Access Control (OAC):
-* Replaces the older Origin Access Identity (OAI).
-* Is one of the ways CloudFront can send authenticated requests to an S3 origin.
+**Origin Access Control (OAC):**
+* An Origin Access Control (OAC) lets CloudFront send authenticated requests to an Amazon S3 origin.
+* `aws_cloudfront_origin_access_control.uploads` creates an OAC, sets s3 as the origin (`origin_access_control_origin_type = "s3"`), configures the OAC to always sign requests to S3 (`signing_behavior = "always"`), and uses AWS Signature Version 4 (`signing_protocol = "sigv4"`).
+* SigV4 is the AWS signing protocol for adding authentication information to AWS API requests. It verifies your identity and protects requests in transit.
+
+Resources to dive deeper into:
+* [`aws_cloudfront_origin_access_control`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_access_control)
+* [Restrict access to an Amazon S3 origin](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html)
+* [AWS Signature Version 4 for API requests](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html)
 
 **Bucket policy:**
 * `data.aws_iam_policy_document.uploads_cloudfront_read` is a data block (doesn't provision infrastructure) that generates an IAM policy in JSON format that we'll attach to the S3 bucket via `aws_s3_bucket_policy`.
@@ -298,8 +304,8 @@ Ideas:
 Resources to dive deeper into:
 * [What is Amazon CloudFront?](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html)
 * [Get started with a CloudFront standard distribution](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
-* [Restrict access to an Amazon S3 origin](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html)
+
 * [Use managed cache policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)
-* [`aws_cloudfront_origin_access_control`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_access_control)
+
 * [`aws_cloudfront_cache_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/cloudfront_cache_policy)
 * [`aws_cloudfront_distribution`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution)
