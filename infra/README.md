@@ -250,9 +250,6 @@ Resources to dive deeper into:
 
 ### `cloudfront.tf`
 
-Before describing what `cloudfront.tf` does, a few concepts we need to understand:
-
-
 **Origin Access Control (OAC):**
 * An Origin Access Control (OAC) lets CloudFront send authenticated requests to an Amazon S3 origin.
 * `aws_cloudfront_origin_access_control.uploads` creates an OAC, sets s3 as the origin (`origin_access_control_origin_type = "s3"`), configures the OAC to always sign requests to S3 (`signing_behavior = "always"`), and uses AWS Signature Version 4 (`signing_protocol = "sigv4"`).
@@ -262,6 +259,101 @@ Resources to dive deeper into:
 * [`aws_cloudfront_origin_access_control`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_access_control)
 * [Restrict access to an Amazon S3 origin](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html)
 * [AWS Signature Version 4 for API requests](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html)
+
+**CloudFront Distribution:**
+
+What is a CloudFront distribution?
+* A CloudFront distribution tells CloudFront where you want content to be delivered from and how to deliver it to users.
+* Key aspects of a distribution:
+  1. Origin servers: like an S3 bucket or an HTTP server, where CloudFront gets your files.
+  2. Domain name: CloudFront assigns a unique domain name to your distribution.
+  3. Edge Locations: CloudFront sends your distribution's configuration to its global network of edge locations, which cache and serve your content close to your users.
+
+What is a cache behavior?
+* A cache behavior describes how CloudFront processes requests matching a specific URL path pattern.
+* It routes to exactly one origin (or origin group). A distribution can have multiple cache behaviors, each pointing to different origins.
+* It specifies the single origin (or one origin group for failover) that serves requests matching its path pattern.
+* When CloudFront receives a viewer request, it compares the requested path against the path patterns of your cache behaviors in order. If no path pattern matches, the default cache behavior is applied.
+* For each cache behavior, you can configure: path pattern, target origin, viewer protocol policy, allowed HTTP methods, caching policies, and more.
+
+What is a default cache behavior?
+* It describes how CloudFront handles requests when no other cache behavior matches.
+* It applies when:
+  * You don't specify a `CacheBehavior` element, or
+  * A request URL doesn't match any of the `PathPattern` values defined in your other `CacheBehavior` elements
+* You must create exactly one default cache behavior per distribution.
+* If you have multiple origins but only a default cache behavior, CloudFront will only ever use one of those origins (the one the default behavior points to). To use all origins, you need at least as many cache behaviors (including the default) as you have origins.
+
+What is a cache policy?
+
+* When attached to a cache behavior in a CloudFront distribution, a cache policy controls two important things:
+  * The cache key: the unique identifier for an object stored in a CloudFront edge location's cache. Each object in the cache has a unique cache key.
+  * TTL (Time to Live): the amount of time, in seconds, that objects remain in a CloudFront edge cache before CloudFront checks with the origin server to see if the object has been updated.
+
+What are managed cache policies?
+
+* CloudFront managed cache policies are a set of predefined cache policies created and maintained by AWS that you can attach to any cache behavior in your CloudFront distribution.
+* They eliminate the need to write or maintain your own cache policy and provide settings optimized for specific use cases.
+* To use them, attach a managed cache policy to a cache behavior in your distribution. You reference the policy either by name (in the console) or by ID (with the AWS CLI or SDKs).
+* Some available managed cache policies are CachingDisabled, CachingOptimized,CachingOptimizedForUncompressedObjects.
+
+What is a cache key?
+
+* A cache key is the unique identifier for an object stored in a CloudFront edge location's cache.
+* Each object in the cache has a unique cache key.
+* A cache hit occurs when a viewer request generates the same cache key as a prior request, and the matching object is in the edge location's cache and still valid.
+* A cache miss occurs when there's no match and CloudFront fetches the content from the origin.
+* A cache hit reduces load on your origin server and reduces latency for the viewer.
+* By default, the cache key includes only:
+  * The domain name of the CloudFront distribution (e.g., `d111111abcdef8.cloudfront.net`).
+  * The URL path of the requested object (e.g., `/content/stories/example-story.html`).
+* You can customize the cache key:
+  * Other values in the viewer request (such as query strings, HTTP headers, and cookies) are not included in the cache key by default.
+  * You can customize the cache key using a cache policy, which lets you include additional values such as HTTP headers, Cookies, URL query strings.
+
+What is Time to Live (TTL)?
+
+* TTL (Time to Live) in Amazon CloudFront refers to the amount of time, in seconds, that objects remain in a CloudFront edge cache before CloudFront checks with the origin server to see if the object has been updated.
+* TTL controls how long cached content stays at CloudFront edge locations before it expires.
+* TTL can help:
+  * Improve performance for users: longer cache durations mean files are more likely to be served directly from the edge cache, closer to the viewer, without a round trip to the origin.
+  * Reduce origin load: fewer requests reach your origin server when content is cached longer.
+  * Serve dynamic content: reducing the cache duration allows you to serve more frequently changing content.
+* CloudFront uses three TTL settings that work together with Cache-Control and Expires HTTP headers from the origin: minimum TTL, maximum TTL, and default TTL.
+* You can use cache policies to control TTL.
+
+How is PostHub's CloudFront distribution configured in `cloudfront.tf`?
+
+In `aws_cloudfront_distribution.uploads`:
+* `enabled=true` means the distribution is active and ready to serve content. If `false`, the distribution is created but not serving content.
+* The `origin {}` block specifies the origin server for the distribution (where CloudFront fetches content when there's a cache miss). In this case, the origin is PostHub's S3 bucket. It also attaches the OAC to the origin, so CloudFront can sign requests to S3.
+* The `default_cache_behavior {}` block defines how CloudFront handles requests that don't match any other cache behavior path pattern, where a cache behavior lets you configure how CloudFront handles requests that match a specific URL path pattern.
+  * `target_origin_id` indicates which origin CloudFront should route requests to when they use the default cache behavior. Its values are the `origin_id` of the origin block.
+  * `viewer_protocol_policy` specifies the protocol viewers can use to access origin files. Possible values are `allow-all`, `https-only`, and `redirect-to-https`. In this case, we are using `redirect-to-https`, which means CloudFront will redirect HTTP requests to HTTPS.
+  * Allowed HTTP methods control which HTTP methods CloudFront accepts from viewers and forwards to the origin. In our case, `allowed_methods = ["GET", "HEAD"]`, which means CloudFront can only retrieve objects or object headers from the origin.
+  * Cached HTTP methods control which HTTP method responses CloudFront will store in its cache. In our case, `cached_methods  = ["GET", "HEAD"]`, which means CloudFront caches responses to GET and HEAD requests.
+  * We retrieve information about the `CachingOptimized` managed cache policy via the `aws_cloudfront_cache_policy.caching_optimized` data source. We then assign that managed policy to `default_cache_behavior` (`cache_policy_id = data.aws_cloudfront_cache_policy.caching_optimized.id`).
+* Since we'll be using the CloudFront-assigned domain name, we'll be making use of the default CloudFront certificate (`cloudfront_default_certificate = true`), which is the built-in SSL/TLS certificate that CloudFront provides automatically for every distribution, at no additional cost. As we saw, when we create a CloudFront distribution, CloudFront assigns it a domain name in the format `d111111abcdef8.cloudfront.net`. The default certificate covers this domain name, enabling HTTPS for your distribution without any additional configuration. If you want to serve content via your own domain (e.g., `https://example.com/image1.jpg`), you must use a Custom SSL Certificate instead.
+
+Resources to dive deeper into:
+* [What is Amazon CloudFront?](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html)
+* [Get started with a CloudFront standard distribution](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
+* [Distribution settings](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistValuesGeneral.html#DownloadDistValuesSSLCertificate)
+* [CacheBehavior](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_CacheBehavior.html)
+* [Cache behavior settings](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistValuesCacheBehavior.html)
+* [DefaultCacheBehavior](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_DefaultCacheBehavior.html)
+* [AWS::CloudFront::Distribution DefaultCacheBehavior](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-cloudfront-distribution-defaultcachebehavior.html)
+* [CachePolicy](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_CachePolicy.html)
+* [Understand cache policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-key-understand-cache-policy.html)
+* [Create cache policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-key-create-cache-policy.html)
+* [AWS::CloudFront::CachePolicy](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-cloudfront-cachepolicy.html)
+* [Use managed cache policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)
+* [Understand the cache key](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/understanding-the-cache-key.html)
+* [Control the cache key with a policy](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html)
+* [Manage how long content stays in the cache (expiration)](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html)
+* [Controlling how long Amazon S3 content is cached by Amazon CloudFront](https://docs.aws.amazon.com/whitepapers/latest/build-static-websites-aws/controlling-how-long-amazon-s3-content-is-cached-by-amazon-cloudfront.html)
+* [`aws_cloudfront_cache_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/cloudfront_cache_policy)
+* [`aws_cloudfront_distribution`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution)
 
 **Bucket policy:**
 * `data.aws_iam_policy_document.uploads_cloudfront_read` is a data block (doesn't provision infrastructure) that generates an IAM policy in JSON format that we'll attach to the S3 bucket via `aws_s3_bucket_policy`.
@@ -280,32 +372,3 @@ Resources for a deeper dive into IAM policies:
 * [Actions, resources, and condition keys for Amazon S3 (for `s3:GetObject`)](https://docs.aws.amazon.com/service-authorization/latest/reference/list_s3.html#list_s3-action-GetObject)
 * [AWS JSON policy elements: Principal](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html)
 * [`depends_on`](https://developer.hashicorp.com/terraform/language/meta-arguments/depends_on)
-
-Ideas:
-* The S3 bucket is private.
-* The browser cannot fetch an object from S3 directly.
-* CloudFront sits in front of the bucket and is the only reader.
-* browser -> CloudFront (public HTTPS) -> OAC-signed request -> S3 bucket.
-* The S3 bucket policy is configured to allow only the CloudFront distribution.
-* Your S3 bucket policy grants access only to your specific distribution, using a condition on AWS:SourceArn (the distribution's ARN)
-* CloudFront signs every request to your S3 bucket using AWS Signature Version 4 (SigV4).
-* cloudfront.tf creates three things: an Origin Access Control (OAC), a CloudFront distribution, and a bucket policy that allows the OAC to read from the S3 bucket.
-* The bucket policy lives in `cloudfront.tf` because it depends on the distribution.
-* We're using a resource-based policy on the bucket.
-* The bucket policy restricts to only the CloudFront distribution we created, not any other distribution. This is done by using a condition on AWS:SourceArn (the distribution's ARN) in the bucket policy.
-* What's a service principal?
-* What's CloudFront domain?
-* What's Origin Access Control (OAC)?
-* What's a CloudFront distribution?
-* What's SigV4?
-* What's a signing behavior?
-* Three pieces: OAC, distribution, and the bucket policy.
-
-Resources to dive deeper into:
-* [What is Amazon CloudFront?](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html)
-* [Get started with a CloudFront standard distribution](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
-
-* [Use managed cache policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)
-
-* [`aws_cloudfront_cache_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/cloudfront_cache_policy)
-* [`aws_cloudfront_distribution`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution)

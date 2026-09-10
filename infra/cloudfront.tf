@@ -35,8 +35,6 @@ resource "aws_cloudfront_distribution" "uploads" {
   price_class = "PriceClass_100"
 
   origin {
-    # NOT bucket_domain_name — the *regional* domain avoids a legacy global
-    # redirect that breaks SigV4 signing for OAC.
     domain_name              = aws_s3_bucket.uploads.bucket_regional_domain_name
     origin_id                = "uploads-s3"
     origin_access_control_id = aws_cloudfront_origin_access_control.uploads.id
@@ -44,28 +42,18 @@ resource "aws_cloudfront_distribution" "uploads" {
 
   default_cache_behavior {
     target_origin_id = "uploads-s3"
-
-    # Read-only. Uploads never go through CloudFront — they're presigned PUTs
-    # straight to S3 — so the distribution needs no write methods at all.
     allowed_methods = ["GET", "HEAD"]
     cached_methods  = ["GET", "HEAD"]
-
-    # Force HTTPS; an http:// image on an https:// page is blocked as mixed
-    # content by the browser anyway.
     viewer_protocol_policy = "redirect-to-https"
-
     cache_policy_id = data.aws_cloudfront_cache_policy.caching_optimized.id
   }
 
-  # Required block, even when we're not restricting anything.
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
 
-  # Use the free *.cloudfront.net certificate. A custom domain would need an
-  # ACM cert in us-east-1 plus aliases — out of scope; we have no domain.
   viewer_certificate {
     cloudfront_default_certificate = true
   }
