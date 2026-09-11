@@ -1,20 +1,3 @@
-# CloudFront distribution — the READ path for uploads.
-#
-# The bucket is private, so the browser can never fetch an object from S3
-# directly. Instead CloudFront sits in front of it and is the only reader:
-#
-#   browser → CloudFront (public HTTPS) → [OAC-signed] → S3 (private)
-#
-# The backend stores only an opaque object key (`imageKey` / `avatar_key`) and
-# resolves it against this distribution's domain via S3_PUBLIC_BASE_URL — see
-# keyToPublicUrl() in posts.service.ts. That env var is the `cloudfront_domain`
-# output below.
-#
-# Three pieces, in dependency order:
-#   1. the OAC        — CloudFront's identity when it calls S3
-#   2. the distribution — uses the OAC, points at the bucket
-#   3. the bucket policy — trusts THIS distribution (needs its ARN, so it's last)
-
 # --- 1. Origin Access Control ---------------------------------------------
 resource "aws_cloudfront_origin_access_control" "uploads" {
   name                              = "${var.uploads_bucket_name}-oac"

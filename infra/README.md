@@ -372,3 +372,100 @@ Resources for a deeper dive into IAM policies:
 * [Actions, resources, and condition keys for Amazon S3 (for `s3:GetObject`)](https://docs.aws.amazon.com/service-authorization/latest/reference/list_s3.html#list_s3-action-GetObject)
 * [AWS JSON policy elements: Principal](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html)
 * [`depends_on`](https://developer.hashicorp.com/terraform/language/meta-arguments/depends_on)
+
+### `iam.tf`
+
+**What is a trust policy?**
+* It is a specific type of resource-based policy attached to an IAM role.
+* It is a JSON policy document that defines which principal entities are allowed to assume an IAM role.
+  * An IAM role is both an identity and a resource that supports resource-based policies.
+  * You must attach both a trust policy and an identity-based policy to an IAM role.
+* It answers the question: *"Who is allowed to assume this role?"*.
+* It can be used to allow AWS services (e.g., Amazon EC2) to assume a role and act on your behalf.
+* Characteristics distinguish a trust policy:
+  * It is attached exclusively to an IAM role (not to users, groups, or other resources directly).
+  * It uses the `Principal` element to specify who can assume the role.
+  * It uses the `sts:AssumeRole` action as the permitted action.
+  * A role can have only one trust policy.
+  * It is a type of resource-based policy (the IAM role is both an identity and a resource).
+* In CloudFormation, it can be attached to an IAM role via the `AssumeRolePolicyDocument` property of the `AWS::IAM::Role` resource.
+
+A minimal example of a trust policy (allowing Amazon EC2 to assume a role):
+
+```json
+{
+    "Version":"2012-10-17",
+    "Statement": {
+        "Sid": "TrustPolicyStatementThatAllowsEC2ServiceToAssumeTheAttachedRole",
+        "Effect": "Allow",
+        "Principal": { "Service": "ec2.amazonaws.com" },
+        "Action": "sts:AssumeRole"
+    }
+}
+```
+
+**What is `sts:AssumeRole`?**
+* `sts:AssumeRole` is an AWS STS (Security Token Service) action that lets a principal (e.g., an AWS service) assume an IAM role and receive temporary security credentials to act with that role's permissions.
+* When a principal assumes a role, AWS STS returns a set of temporary credentials consisting of an access key ID, a secret access key, and a session token.
+* Temporary credentials can then be used to make AWS API calls with the permissions defined by the assumed role.
+* The target role must have a trust policy that explicitly permits the calling principal to assume it.
+* It is used in IAM policies to control which principals may assume which roles.
+
+**Breaking down each resource and data source in `iam.tf`:**
+
+`data.aws_iam_policy_document.ec2_assume_role`:
+
+* The `aws_iam_policy_document` data source generates an IAM policy document in JSON format.
+* Doesn't have an explicit `effect` argument. When omitted, `effect` defaults to `Allow` in Terraform's `aws_iam_policy_document`.
+* `sts:AssumeRole` is the only allowed action.
+* The principal (who gets the permission) is the EC2 service itself.
+* What's the permission EC2 is being granted? The permission to assume a role?
+* Is it a trust policy? Or is it a common IAM policy?
+* What's the purpose of `std:Assumerole`?
+* Who's going to use this IAM policy?
+* Why are we doing this?
+
+`aws_iam_role.app`:
+
+* `aws_iam_role` provides an IAM role.
+* `assume_role_policy` is the trust policy attached to an IAM role.
+  * It is a JSON policy document that defines which principals are allowed to assume the role.
+  * It answers the question *"Who is allowed to become this role?"*. Without it, no entity can assume the role.
+  * It is a required attribute when creating an `aws_iam_role` resource.
+* `assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json`:
+  * Attached the `ec2_assume_role` trust policy to the `aws_iam_role.app` role.
+* This role is intended to be assumed by EC2 instances (principal is the Amazon EC2 service).
+  * Intended to be assumed by ANY EC2 instance?
+
+Ideas:
+
+* The IAM role for the EC2 instance.
+* The backend never holds AWS access keys.
+* The EC2 instance the backed runs on carries an IAM role.
+* The SDK picks up short-lived credentials from the instance metadata service.
+* Those credentials sign the presigned PUT URLs for the user to upload images to the S3 bucket.
+* Three resources:
+  * The role (who can assume it)
+  * The permission policy (what it may do once assumed)
+  * The instance profile (the wrapper EC2 needs to attacha role to a box)
+* When you create a role, two policies are involved:
+  * Trust policy: specifies who can assume the role.
+  * Permissions policy: specifies what can be done with the role.
+
+Resources:
+
+* [Policies and permissions in AWS Identity and Access Management](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html)
+* [IAM JSON policy element reference](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html)
+* [Grammar of the IAM JSON policy language](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_grammar.html)
+* [AWS JSON policy elements: Principal](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html)
+* [AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html)
+* [Policies and permissions in AWS Identity and Access Management - Resource-based policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_resource-based)
+* [When do I use IAM? - When you create policies and permissions](https://docs.aws.amazon.com/IAM/latest/UserGuide/when-to-use-iam.html#getting-started_trust-policies)
+* [Create a role using custom trust policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-custom.html)
+* [Update a role trust policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_update-role-trust-policy.html)
+* [Grant a user permissions to pass a role to an AWS service](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html)
+* [Step 2: (CLI only) creating an IAM role for Amazon Comprehend](https://docs.aws.amazon.com/comprehend/latest/dg/tutorial-reviews-create-role.html)
+* [Create a role to give permissions to an IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html)
+* [What is AWS Identity and Access Management Roles Anywhere?](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html)
+* [Restrict assumed IAM role access](https://docs.aws.amazon.com/codeguru/detector-library/terraform/restrict-assumed-role-terraform/)
+* [AWS::IAM::Role](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-iam-role.html)
