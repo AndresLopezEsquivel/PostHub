@@ -411,31 +411,124 @@ A minimal example of a trust policy (allowing Amazon EC2 to assume a role):
 * The target role must have a trust policy that explicitly permits the calling principal to assume it.
 * It is used in IAM policies to control which principals may assume which roles.
 
+**What are identity-based policies?**
+* An identity-based policy is a JSON permissions policy document that you attach to an IAM identity (a user, a group of users, or role).
+* They control what actions that identity can perform, on which resources, and under what conditions.
+* They come into two forms:
+  * Inline policies: embedded directly into a single identity.
+  * Managed policies: standalone policies that can be attached to multiple identities.
+* Unlike resource-based policies, they attach to an identity rather than a resource.
+* They lack a `Principal` element.
+  * The policy is attached directly to an identity, the principal is implicitly the identity it is attached to.
+  * Resource-based policies include a `Principal` element to specify who is allowed or denied access to the resource.
+  * Both identity- and resource-based policies use the standard JSON policy document structure with `Version`, `Statement`, `Effect`, `Action`, `Resource`, and optionally `Condition`.
+
+
+**What are permissions policies?**
+* The term *permissions policies* is the broader concept.
+  * It refers to any policy that grants or restricts permissions (actions on resources).
+  * Identity-based and resource-based policies are both permissions policies.
+* The opposite category is a trust policy, which defines who can assume a role.
+
+**What's an inline policy?**
+* It is a policy created for a single IAM identity (a user, user group, or role) that is embedded directly into that identity.
+* It maintains a strict one-to-one relationship between a policy and an identity.
+* It is deleted when you delete the identity.
+* It is used when you want to ensure that permissions are never inadvertently assigned to the wrong identity.
+  * It part of that specific identity and cannot be reused or attached elsewhere.
+  * If a policy could apply to more than one entity, a managed policy is the better choice.
+
+**What is an instance profile?**
+* It is the mechanism by which an IAM role is attached to and made available on an EC2 instance.
+  * An IAM role cannot be attached directly to an EC2 instance. It must be associated through an instance profile.
+* It can contain only one IAM role, though a role can be included in multiple instance profiles.
+* Its core purpose is to:
+  * Allow applications running on EC2 instances to securely make API requests to AWS services.
+  * Removes the need to distribute or manage long-term static AWS credentials on those instances.
+* Instead of embedding credentials, it delivers temporary credentials to the instance automatically.
+* It helps solve several problems:
+  * No need to distribute AWS credentials to each instance.
+    * Especially difficult for Spot Instances or Auto Scaling groups.
+  * No need to manually rotate credentials on each instance.
+  * Permissions can be updated centrally by changing the IAM role
+* When using the IAM console to create an IAM role for EC2, the console automatically creates an instance profile with the same name as the role.
+* If creating the IAM role using the AWS CLI, API, or an AWS SDK, you must:
+  * Create the instance profile separately.
+  * Add the role to the instance profile.
+* For example, you can use an instance profile to grant an application on an EC2 instance permission to read from an S3 bucket, without ever storing an access key on the instance.
+
+For more information on instance profiles:
+
+* [IAM roles for Amazon EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html)
+* [Use instance profiles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html)
+* [Use an IAM role to grant permissions to applications running on Amazon EC2 instances](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html)
+* [`aws_iam_instance_profile`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile)
+
 **Breaking down each resource and data source in `iam.tf`:**
 
 `data.aws_iam_policy_document.ec2_assume_role`:
 
-* The `aws_iam_policy_document` data source generates an IAM policy document in JSON format.
-* Doesn't have an explicit `effect` argument. When omitted, `effect` defaults to `Allow` in Terraform's `aws_iam_policy_document`.
-* `sts:AssumeRole` is the only allowed action.
-* The principal (who gets the permission) is the EC2 service itself.
-* What's the permission EC2 is being granted? The permission to assume a role?
-* Is it a trust policy? Or is it a common IAM policy?
-* What's the purpose of `std:Assumerole`?
-* Who's going to use this IAM policy?
-* Why are we doing this?
+This data source builds a JSON IAM policy document. It doesn't provision AWS resources. This IAM policy will later become a trust policy when attached to `posthub-app-role` (defined in the `aws_iam_role.app` resource) via `assume_role_policy`.
+
+* `actions = ["sts:AssumeRole"]`
+  * `sts:AssumeRole` is the only allowed action.
+  * When omitted, `effect` defaults to `Allow` in Terraform's `aws_iam_policy_document`.
+* `principals {...}`
+  * The principal is the Amazon EC2 service itself.
+  * Amazon EC2 service is the principal allowed to assume the IAM role this trust policy will be attached to (in this case, `posthub-app-role`, defined in the `aws_iam_role.app` resource).
 
 `aws_iam_role.app`:
 
-* `aws_iam_role` provides an IAM role.
-* `assume_role_policy` is the trust policy attached to an IAM role.
+This resource creates the `posthub-app-role` IAM role. Its trust policy is defined in `data.aws_iam_policy_document.ec2_assume_role`, and the principal allowed to assume the role is the Amazon EC2 service. The role reaches EC2 instances via the `posthub-app-profile` instance profile defined in `aws_iam_instance_profile.app`.
+
+* `assume_role_policy` specifies the trust policy attached to the IAM role.
   * It is a JSON policy document that defines which principals are allowed to assume the role.
   * It answers the question *"Who is allowed to become this role?"*. Without it, no entity can assume the role.
   * It is a required attribute when creating an `aws_iam_role` resource.
 * `assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json`:
-  * Attached the `ec2_assume_role` trust policy to the `aws_iam_role.app` role.
-* This role is intended to be assumed by EC2 instances (principal is the Amazon EC2 service).
-  * Intended to be assumed by ANY EC2 instance?
+  * Attaches the IAM policy JSON document built by `data.aws_iam_policy_document.ec2_assume_role`.
+
+`data.aws_iam_policy_document.uploads_write`:
+
+This data source builds a JSON IAM policy document rather than provisioning AWS resources. It's an identity-based policy attached inline to `posthub-app-role` (defined in `aws_iam_role.app`) via policy in `aws_iam_role_policy.uploads_write`. Once attached, it grants that role `s3:PutObject` on PostHub's S3 objects (`${aws_s3_bucket.uploads.arn}/*`).
+
+While `data.aws_iam_policy_document.ec2_assume_role` specifies the principals that can assume `posthub-app-role`, `data.aws_iam_policy_document.uploads_write` defines which actions the role is allowed to perform.
+
+* `sid="PutUploadObjects"`
+  * `sid` is the Statement ID. It is  an optional identifier to differentiate between statements within a policy.
+  * In this case, the Statement ID is `"PutUploadObjects"`
+* `actions   = ["s3:PutObject"]`
+  * `actions` represents the list of API actions that the statement either allows or denies.
+  * Action names consist of a service namespace, a colon, and the action name.
+  * In this case, `effect` is omitted, so it defaults to `"Allow"`.
+  * This statement only allows the `s3:PutObject` action. It allows to add objects to an S3 bucket.
+  * `s3:PutObject` is an object-level operation.
+    * Object operations are S3 API operations that operate on the object resource type.
+    * In IAM policies, this means the Resource element must be an object ARN (e.g., `arn:aws:s3:::bucket-name/*`), not a bucket ARN.
+* `resources = ["${aws_s3_bucket.uploads.arn}/*"]`
+  * `resources` specifies the resource(s) to which the actions apply, identified by their ARN.
+  * An Amazon Resource Name (ARN) uniquely identifies an AWS resource.
+  * Since `s3:PutObject` is an object-level action, `resources` specifies all objects in PostHub's S3 bucket, not the bucket itself.
+
+`aws_iam_role_policy.uploads_write`:
+
+This resource attaches the identity-based IAM policy defined in `data.aws_iam_policy_document.uploads_write` to the `posthub-app-role` IAM role defined in `aws_iam_role.app`.
+
+* `aws_iam_role_policy` adds an inline policy document embedded in a specified IAM role.
+  * Its equivalent CloudFormation resource type is `AWS::IAM::RolePolicy`.
+  * `aws_iam_role` vs. `aws_iam_role_policy`
+    * `aws_iam_role` creates the role itself and defines its trust policy.
+    * `aws_iam_role_policy` attaches an inline policy to the role, defining what the role can do.
+* `role   = aws_iam_role.app.id`
+  * `role` specifies the IAM role the inline policy attaches to.
+  * In this case, the policy is attached to the `posthub-app-role` role, defined in `aws_iam_role.app`.
+* `policy = data.aws_iam_policy_document.uploads_write.json`
+  * `policy` attaches the inline policy document, which is a JSON formatted string.
+  * In this case, we are attaching the policy created with `aws_iam_policy_document.uploads_write`.
+
+`aws_iam_instance_profile.app`:
+
+This resource creates the `posthub-app-profile` instance profile. The Amazon EC2 service is the principal that can assume the `posthub-app-role` IAM role (defined in `aws_iam_role.app`); however, since IAM roles can't be attached directly to EC2 instances, `posthub-app-role` reaches them via `posthub-app-profile`. This way, applications running on EC2 instances can securely make API requests to AWS services without long-term, static credentials. Here, PostHub's backend will be able to generate presigned URLs for users to upload images to PostHub's S3 bucket.
 
 Ideas:
 
@@ -448,12 +541,14 @@ Ideas:
   * The role (who can assume it)
   * The permission policy (what it may do once assumed)
   * The instance profile (the wrapper EC2 needs to attacha role to a box)
+* Reads go through CloudFront, not the SDK, so no `s3:GetObject`
 * When you create a role, two policies are involved:
   * Trust policy: specifies who can assume the role.
   * Permissions policy: specifies what can be done with the role.
 
 Resources:
 
+* [Managed policies and inline policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
 * [Policies and permissions in AWS Identity and Access Management](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html)
 * [IAM JSON policy element reference](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html)
 * [Grammar of the IAM JSON policy language](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_grammar.html)
@@ -468,4 +563,11 @@ Resources:
 * [Create a role to give permissions to an IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html)
 * [What is AWS Identity and Access Management Roles Anywhere?](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html)
 * [Restrict assumed IAM role access](https://docs.aws.amazon.com/codeguru/detector-library/terraform/restrict-assumed-role-terraform/)
-* [AWS::IAM::Role](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-iam-role.html)
+* [`AWS::IAM::Role`](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-iam-role.html)
+* [`AWS::IAM::RolePolicy`](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-iam-rolepolicy.html)
+* [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
+* [Identify AWS resources with Amazon Resource Names (ARNs)](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html)
+* [Required permissions for Amazon S3 API operations](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html)
+* [Access control in Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-management.html)
+* [Grant read and write access to Amazon S3 bucket objects](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html)
+* [`aws_iam_role_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy)
