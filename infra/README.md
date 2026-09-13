@@ -375,6 +375,12 @@ Resources for a deeper dive into IAM policies:
 
 ### `iam.tf`
 
+Clients fetch user-uploaded images (post pictures and profile avatars) via the CloudFront distribution defined in `cloudfront.tf`. Conversely, users upload images to PostHub's S3 bucket via presigned URLs provided by the backend, so binaries never go through the API.
+
+To prevent the backend from using long-term, static AWS credentials to generate the presigned URLs, we use an instance profile to attach an IAM role to the EC2 instance where the API runs. The role's trust policy allows the Amazon EC2 service to assume it. That trust relationship is what allows AWS Security Token Service (STS) to issue short-term credentials, which EC2 places on IMDS, where the AWS SDK can read them to sign the presigned URLs. The role's inline policy grants only s3:PutObject, so those credentials can't read or list objects.
+
+Below, we define the relevant concepts and walk through iam.tf in more detail.
+
 **What is a trust policy?**
 * It is a specific type of resource-based policy attached to an IAM role.
 * It is a JSON policy document that defines which principal entities are allowed to assume an IAM role.
@@ -464,6 +470,21 @@ For more information on instance profiles:
 * [Use an IAM role to grant permissions to applications running on Amazon EC2 instances](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html)
 * [`aws_iam_instance_profile`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile)
 
+**What is IMDS?**
+* It stands for Instance Metadata Service.
+* It is a service that runs locally on every EC2 instance.
+* It provides data about the instance that applications can use to configure or manage the running instance.
+  * This data is called instance metadata and includes categories such as hostname, events, and security groups.
+* It is accessible from within the instance itself via a local endpoint
+  * By default `http://169.254.169.254` (IPv4) or `http://[fd00:ec2::254]` (IPv6).
+* Its key uses:
+  * Providing instance metadata (hostname, security groups, AMI ID, etc.).
+  * Supplying temporary credentials for an IAM role attached to the instance (AWS SDKs use IMDS as part of their default credential provider chain).
+
+Fore more information on IMDS:
+* [Configure the Instance Metadata Service options](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-options.html)
+* [IMDS credential provider](https://docs.aws.amazon.com/sdkref/latest/guide/feature-imds-credentials.html)
+
 **Breaking down each resource and data source in `iam.tf`:**
 
 `data.aws_iam_policy_document.ec2_assume_role`:
@@ -473,6 +494,7 @@ This data source builds a JSON IAM policy document. It doesn't provision AWS res
 * `actions = ["sts:AssumeRole"]`
   * `sts:AssumeRole` is the only allowed action.
   * When omitted, `effect` defaults to `Allow` in Terraform's `aws_iam_policy_document`.
+  * Via `sts:AssumeRole`, AWS STS issues the short-term credentials the API uses to sign the presigned URLs users need to upload images.
 * `principals {...}`
   * The principal is the Amazon EC2 service itself.
   * Amazon EC2 service is the principal allowed to assume the IAM role this trust policy will be attached to (in this case, `posthub-app-role`, defined in the `aws_iam_role.app` resource).
@@ -530,22 +552,6 @@ This resource attaches the identity-based IAM policy defined in `data.aws_iam_po
 
 This resource creates the `posthub-app-profile` instance profile. The Amazon EC2 service is the principal that can assume the `posthub-app-role` IAM role (defined in `aws_iam_role.app`); however, since IAM roles can't be attached directly to EC2 instances, `posthub-app-role` reaches them via `posthub-app-profile`. This way, applications running on EC2 instances can securely make API requests to AWS services without long-term, static credentials. Here, PostHub's backend will be able to generate presigned URLs for users to upload images to PostHub's S3 bucket.
 
-Ideas:
-
-* The IAM role for the EC2 instance.
-* The backend never holds AWS access keys.
-* The EC2 instance the backed runs on carries an IAM role.
-* The SDK picks up short-lived credentials from the instance metadata service.
-* Those credentials sign the presigned PUT URLs for the user to upload images to the S3 bucket.
-* Three resources:
-  * The role (who can assume it)
-  * The permission policy (what it may do once assumed)
-  * The instance profile (the wrapper EC2 needs to attacha role to a box)
-* Reads go through CloudFront, not the SDK, so no `s3:GetObject`
-* When you create a role, two policies are involved:
-  * Trust policy: specifies who can assume the role.
-  * Permissions policy: specifies what can be done with the role.
-
 Resources:
 
 * [Managed policies and inline policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
@@ -570,4 +576,7 @@ Resources:
 * [Required permissions for Amazon S3 API operations](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html)
 * [Access control in Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-management.html)
 * [Grant read and write access to Amazon S3 bucket objects](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html)
+* [`aws_iam_policy_document`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document)
+* [`aws_iam_role`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role)
 * [`aws_iam_role_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy)
+* [`aws_iam_instance_profile`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile)
