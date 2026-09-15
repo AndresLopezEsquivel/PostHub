@@ -580,3 +580,92 @@ Resources:
 * [`aws_iam_role`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role)
 * [`aws_iam_role_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy)
 * [`aws_iam_instance_profile`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile)
+
+### `network.tf`
+
+`network.tf` defines two security groups: `posthub-ec2-sg` (`aws_security_group.ec2`) and `posthub-rds-sg` (`aws_security_group.rds`). The EC2 instance where PostHub's API runs will be associated with `posthub-ec2-sg`, while PostHub's Postgres RDS instance will be associated with `posthub-rds-sg`.
+
+The `posthub-ec2-sg` security group has two inbound rules (`ec2_ssh` and `ec2_https`) and one outbound rule (`ec2_all`). The `ec2_ssh` rule is intended for SSH access and permits inbound TCP traffic on port 22 from the CIDR range supplied by `var.ssh_allowed_cidr`. The `ec2_https` rule is intended for HTTPS connections and allows inbound TCP traffic on port 443 from `0.0.0.0/0` (any address on the internet). The `ec2_all` rule permits unrestricted outbound traffic, letting the instance initiate connections to any destination, on any port and protocol.
+
+The `posthub-rds-sg` security group has a single inbound rule, `rds_postgres`, which allows inbound TCP traffic on port 5432 from resources associated with the `posthub-ec2-sg` security group. In this case, it'll allow inbound traffic originating from the EC2 instance where PostHub's API runs.
+
+Keep in mind that security groups are stateful, which means that if an inbound rule permits traffic to reach the instance, the response traffic is automatically allowed out (regardless of outbound rules). Similarly, if the instance initiates traffic and an outbound rule permits it, the response traffic is allowed back in (regardless of inbound rules). That explains why `rds_postgres` needs no outbound rule: query results flow back over the connection PostHub's API opened to RDS, without further restriction.
+
+A quick reminder: security groups operate at the protocol and port level, and they cannot inspect application-layer protocols to distinguish whether a connection is SSH, HTTP, or HTTPS by content. For instance, a rule allowing TCP port 22 is described as allowing "SSH traffic" purely because SSH conventionally uses that port.
+
+**Breaking down each resource and data source in `network.tf`:**
+
+`data.aws_vpc.default`:
+
+`aws_vpc` looks up and provides details about a specific VPC. It is a data block, so Terraform creates and destroys nothing. Some attributes it exports are `id` (the VPC ID), `arn` (ARN of the VPC), `cidr_block` (primary IPv4 CIDR range).
+* `default=true` selects the account's default VPC in the region.
+
+`aws_security_group.ec2`:
+
+`aws_security_group` creates a new security group.
+
+* `name = "posthub-ec2-sg"`
+  * The security group's name is `posthub-ec2-sg`.
+* `description = "PostHub application server: SSH + HTTPS"`
+  * `description` defines the security group's description.
+* `vpc_id = data.aws_vpc.default.id`
+  * `vpc_id` defines which VPC owns the security group.
+  * In this case, the default VPC of the region owns the security group.
+
+`aws_vpc_security_group_ingress_rule.ec2_ssh`:
+
+`aws_vpc_security_group_ingress_rule` manages one inbound (ingress) rule for a security group. In this case, the `ec2_ssh` rule attaches to `posthub-ec2-sg` (defined in `aws_security_group.ec2`) and permits inbound TCP traffic on port 22 only (for SSH access), from the CIDR range supplied by `var.ssh_allowed_cidr`. A security group is a layer-4 filter. It matches protocol, port, and source CIDR, and inspects nothing above that. It has no idea whether the bytes are HTTP, HTTPS, or SSH.
+
+* `security_group_id = aws_security_group.ec2.id`
+  * The inbound rule is attached to the security group defined in `aws_security_group.ec2`.
+* `cidr_ipv4 = var.ssh_allowed_cidr`
+  * `cidr_ipv4` is the source IPv4 CIDR range. It represents who may connect in, written in CIDR notation.
+  * In this case, the source range comes from the `ssh_allowed_cidr` variable.
+* `ip_protocol = "tcp"`
+  * `ip_protocol` is the IP protocol name or number.
+    * It accepts a name (`tcp`, `udp`, `icmp`, `icmpv6`) or a number (`6`, `17`, `1`, `58`).
+  * In our case, SSH uses `tcp`.
+* `from_port=22` and `to_port=22`
+  * `from_port` and `to_port` define a port range, not a direction.
+  * `from_port` is the lowest port in the range (inclusive).
+  * `to_port` is the highest port in the range (inclusive).
+  * `from_port == to_port` means one port only.
+    * In our case, `from_port=22` and `to_port=22`. We only need port 22 for SSH connections.
+  * `from_port != to_port` means a range of ports. `8000, 8080` opens 81 ports.
+
+`aws_vpc_security_group_ingress_rule.ec2_https`:
+
+The `ec2_https` rule attaches to `posthub-ec2-sg` (defined in `aws_security_group.ec2`) and allows inbound TCP traffic on port 443 from `0.0.0.0/0`, meaning any address on the internet.
+
+`aws_vpc_security_group_egress_rule.ec2_all`:
+
+The `ec2_all` rule attaches to `posthub-ec2-sg` (defined in `aws_security_group.ec2`) and permits unrestricted outbound traffic, letting the instance initiate connections to any destination on any protocol or port. Setting `ip_protocol` to `-1` matches all protocols and all port ranges, so `from_port` and `to_port` are omitted. It enables package downloads, API calls, and updates without restricting which destinations the instance can reach.
+
+`aws_security_group.rds`:
+
+The `rds` resource creates a security group named `posthub-rds-sg` inside the account's default VPC, which the `aws_vpc` data source looks up.
+
+`aws_vpc_security_group_ingress_rule.rds_postgres`:
+
+The `rds_postgres` rule attaches to the `posthub-rds-sg` security group and allows inbound TCP traffic on port 5432 from resources associated with the `posthub-ec2-sg` security group (defined in `aws_security_group.ec2`).
+
+* `referenced_security_group_id`
+  * Allows only traffic originating from resources associated with the security group it names.
+  * Names another security group as the source, instead of an IP range.
+  * In this case, allows only traffic originating from `posthub-ec2-sg` (defined in `aws_security_group.ec2`).
+  * Some of its benefits in our particular case are:
+    * Removes the need to track instance IPs in variables or CIDR lists.
+    * Add an instance to the EC2 group and it inherits database access automatically.
+    * Access still works even if an instance gets a new IP after a stop/start.
+
+Resources:
+
+* [Control traffic to your AWS resources using security groups](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
+* [Protocol numbers](https://www.iana.org/assignments/protocol-numbers)
+* [Control traffic to your AWS resources using security groups](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
+* [Amazon EC2 security groups for your EC2 instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-security-groups.html)
+* [Amazon EC2 security group connection tracking](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-connection-tracking.html)
+* [`aws_vpc`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc)
+* [`aws_security_group`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group)
+* [`aws_vpc_security_group_ingress_rule`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule)
+* [`aws_vpc_security_group_egress_rule`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule)
