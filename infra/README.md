@@ -669,3 +669,76 @@ Resources:
 * [`aws_security_group`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group)
 * [`aws_vpc_security_group_ingress_rule`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule)
 * [`aws_vpc_security_group_egress_rule`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule)
+
+### `ec2.tf`
+
+**Breaking down each resource and data source in `ec2.tf`:**
+
+`data.aws_ami.ubuntu`:
+
+* `aws_ami`
+  * It looks up an existing Amazon Machine Image (AMI) to launch instances from.
+  * It retrieves the ID of a registered AMI for use in other resources.
+* `most_recent = true`
+  * If matches more than one AMI, it returns the most recent one.
+* `owners = ["099720109477"]`
+  * It is a filter that specifies who published the AMI.
+  * It matters because:
+    * AMI names aren't unique or reserved.
+    * Different owners can publish AMIs with the same name.
+    * Without it, we could end up launching an image published by an unknown party.
+  * `099720109477` is Canonical's ID.
+* `filter { ... }`
+  * Each `filter` block specifies a `name`/`values` pair to narrow the AMI search.
+  * `name` is the name of the filter.
+    * Common keys are `name`, `architecture`, `virtualization-type`, `root-device-type`, `state``
+  * `values` is a list that specifies the values that are accepted for the given filter.
+  * In our case, `filter` restricts the search to AMIs whose name matches Canonical's publishing convention.
+    * The prefix `ubuntu/images/` identifies the image namespace.
+    * `hvm-ssd*` requires HVM virtualization on EBS storage and tolerates variants such as `hvm-ssd-gp3`.
+    * The middle segment pins three things:
+      * The release (Ubuntu 24.04 LTS, Noble Numbat).
+      * The architecture (x86_64).
+      * The build type (server).
+
+`aws_key_pair.app`:
+
+* `aws_key_pair`
+  * It registers an SSH public key with AWS for instance login.
+  * You generate the key pair yourself; AWS never sees the private key.
+  * A key pair is used to control login access to EC2 instances.
+* `key_name = "posthub-key"`
+  * In this case, the name of the key pair is `posthub-key`.
+* `public_key = file(pathexpand(var.ssh_public_key_path))`
+  * `public_key` is the public key itself.
+  * `file(...)` reads the file at apply time and returns its contents as a string.
+  * `pathexpand(...)` expands a leading `~` into the absolute home directory.
+    * `file()` does not expand `~` on its own.
+  * `var.ssh_public_key_path` defaults to `~/.ssh/id_ed25519.pub`.
+
+`aws_instance.app`:
+
+* `aws_instance` provisions a single EC2 instance.
+* `ami = data.aws_ami.ubuntu.id`
+  * `ami` specifies the AMI to boot.
+  * In this case, the AMI will be the one specified by `data.aws_ami.ubuntu`.
+* `instace_type = var.instance_type`
+  * `instance_type` specifies the instance type for use with the instance.
+  * `var.instance_type` defaults to `t3.micro`.
+* `key_name = aws_key_pair.app.key_name`
+  * `key_name` specifies the name of the key pair to be used with the instance.
+  * `aws_key_pair.app.key_name` is the the SSH key pair registered via `aws_key_pair`.
+* `vpc_security_group_ids = [aws_security_group.ec2.id]`
+  * `vpc_security_group_ids` is the list of security groups associated with the instance.
+  * `aws_security_group.ec2` is the `posthub-ec2-sg` security group defined in `network.tf`.
+* `iam_instance_profile = aws_iam_instance_profile.app.name``
+  * `iam_instance_profile`
+
+Resources:
+
+* [Amazon EC2 key pairs and Amazon EC2 instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
+* [Amazon EC2 instance types](https://docs.aws.amazon.com/ec2/latest/instancetypes/instance-types.html)
+* [Amazon EC2 instance type specifications](https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-type-specifications.html)
+* [`aws_ami` data source](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami)
+* [`aws_key_pair` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/key_pair)
+* [`aws_instance` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance)
