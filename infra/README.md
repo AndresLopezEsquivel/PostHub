@@ -672,6 +672,53 @@ Resources:
 
 ### `ec2.tf`
 
+`ec2.tf` provisions the EC2 instance where PostHub runs.
+
+**What's cloud-init?**
+
+* It is an open-source application that bootstraps Linux images in a cloud computing environment.
+* When you launch an instance, it receives actions through the *user data* fields.
+  * User data is information you pass to an EC2 instance at launch time to automate configuration tasks.
+  * cloud-init is the open-source application that reads and acts on that user data when the instance boots
+* Some of its supported user data formats are Gzip, Base64, and user data scripts.
+  * By default, user data scripts and cloud-init directives run only during the first boot when you launch an instance.
+
+Resources:
+* [`cloud-init` documentation](https://docs.cloud-init.io/en/22.2/)
+* [Customized cloud-init - Amazon Linux 2023](https://docs.aws.amazon.com/linux/al2023/ug/cloud-init.html)
+* [Customized cloud-init - Amazon Linux 2027](https://docs.aws.amazon.com/linux/al2027/ug/cloud-init.html)
+* [Using cloud-init on AL2](https://docs.aws.amazon.com/linux/al2/ug/amazon-linux-cloud-init.html)
+* [Run commands when you launch an EC2 instance with user data input](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html)
+
+**What's a user data script in cloud-init?**
+* It is one of the supported formats that cloud-init can process.
+* It allows you to run shell commands automatically on the instance during boot
+
+Resources:
+
+* [Run commands when you launch an EC2 instance with user data input](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html)
+
+**What are EC2 instance metadata options?**
+
+* EC2 instance metadata options control how the Instance Metadata Service (IMDS) behaves on your instances.
+* There are five configurable options:
+  * `HttpEndpoint`
+    * Enables or disables the HTTP metadata endpoint on your instances.
+    * If set to `disabled`, you cannot access your instance metadata at all.
+  * `HttpTokens`
+    * Controls whether IMDSv2 (session-oriented, token-based) is required or optional.
+    * If set to `required`, IMDSv2 is mandatory.
+  * `HttpPutResponseHopLimit`
+  * `HttpProtocolIpv6`
+  * `InstanceMetadataTags`
+* Options can be set at three levels: account, AMI, and instance levels.
+
+Resources:
+* [`AWS::EC2::Instance` MetadataOptions](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-ec2-instance-metadataoptions.html)
+* [`modify-instance-metadata-options`](https://docs.aws.amazon.com/cli/latest/reference/ec2/modify-instance-metadata-options.html)
+* [Use instance metadata to manage your EC2 instance](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html)
+* [Use the Instance Metadata Service to access instance metadata](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html)
+
 **Breaking down each resource and data source in `ec2.tf`:**
 
 `data.aws_ami.ubuntu`:
@@ -731,8 +778,18 @@ Resources:
 * `vpc_security_group_ids = [aws_security_group.ec2.id]`
   * `vpc_security_group_ids` is the list of security groups associated with the instance.
   * `aws_security_group.ec2` is the `posthub-ec2-sg` security group defined in `network.tf`.
-* `iam_instance_profile = aws_iam_instance_profile.app.name``
-  * `iam_instance_profile`
+* `iam_instance_profile = aws_iam_instance_profile.app.name`
+  * `iam_instance_profile` specifies the instance's instance profile.
+  * `aws_iam_instance_profile.app` is defined in `iam.tf`and we've discussed it earlier.
+* `user_data = local.user_data`
+  * `user_data` hands a script to the instance that cloud-init runs once, as root, on first boot.
+  * In this case, it installs Docker CE and the Compose plugin.
+* `metadata_options { ... }`
+   * `metadata_options` configures the instance's access to IMDS.
+   * `http_endpoint = "enabled"` keeps IMDS reachable at all.
+      * If disabled, PostHub's API presigning loses its credential source.
+   * `http_tokens = "required"` enforces IMDSv2.
+
 
 Resources:
 
