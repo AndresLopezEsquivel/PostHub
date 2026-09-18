@@ -799,3 +799,53 @@ Resources:
 * [`aws_ami` data source](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami)
 * [`aws_key_pair` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/key_pair)
 * [`aws_instance` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance)
+
+### `s3_cors.tf`
+
+`s3.tf` provisions PostHub's S3 bucket, while `s3_cors.tf` provisions its CORS configuration. Cross-Origin Resource Sharing (CORS) is a mechanism that allows a server to control which websites (origins) can access its resources from a browser. It tells the browser which requests coming from other origins should be allowed.
+
+In PostHub's case, the frontend uploads images (post pictures and profile avatars) directly to S3 via a presigned URL provided by the API. Since the frontend's domain differs from the S3 domain, CORS is needed.
+
+The CORS configuration of PostHub's S3 bucket allows only `PUT` requests. Remember: image reads go through a CloudFront distribution, while image uploads go through an S3 presigned URL.
+
+On PostHub's EC2 instance (provisioned in `ec2.tf`), Nginx terminates TLS and serves the React single-page application's build files over HTTPS on port 443. For testing purposes, PostHub uses the EC2 instance's public IP rather than an Elastic IP, so the address changes whenever the instance is stopped and restarted. Hence the domain allowed by the S3 CORS configuration is `https://<EC2-PUBLIC-IP>` (`"https://${aws_instance.app.public_ip}"` in `aws_s3_bucket_cors_configuration.uploads`).
+
+**What's an S3 CORS configuration?**
+
+* It contains rules that define which origins (domains) are allowed to make cross-origin requests to the bucket, which HTTP methods are permitted for each origin, and other operation-specific details.
+  * CORS is a browser security feature that normally blocks web applications loaded from one domain from making requests to a different domain.
+  * By adding a CORS configuration to your S3 bucket, you selectively allow cross-origin access to your S3 resources.
+  * CORS is primarily a browser security mechanism. It doesn't prevent someone from making requests to S3 using curl, the AWS CLI, etc
+* Key configuration elements:
+
+| Element | Description |
+|---|---|
+| `AllowedOrigins` | Domains allowed to make cross-origin requests |
+| `AllowedMethods` | HTTP methods permitted |
+| `AllowedHeaders` | Headers allowed in preflight requests |
+| `ExposeHeaders` | Response headers accessible to browser scripts |
+| `MaxAgeSeconds` | How long (in seconds) the browser can cache a preflight response |
+
+Resources:
+* [MDN docs - Cross-Origin Resource Sharing (CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
+* [AWS - What's CORS](https://aws.amazon.com/what-is/cross-origin-resource-sharing/)
+* [S3 - Using cross-origin resource sharing (CORS)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cors.html)
+* [Cross-Origin Resource Sharing (CORS)](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/cors.html)
+
+**Breaking down each resource in `s3_cors.tf`**
+
+`aws_s3_bucket_cors_configuration.uploads`:
+* `aws_s3_bucket_cors_configuration`
+  * Configures CORS rules for an S3 bucket.
+* `bucket = aws_s3_bucket.uploads.id`
+  * `bucket` specifies the S3 bucket the CORS configuration applies to.
+  * `aws_s3_bucket.uploads` is the PostHub's S3 bucket, defined in `s3.tf`.
+* `cors_rule { ... }`
+  * `allowed_origins = ["https://${aws_instance.app.public_ip}"]`
+    * `allowed_origins` specifies which origins are allowed to make cross-origin requests.
+  * `allowed_methods = ["PUT"]`
+    * `allowed_methods` specifies which HTTP methods the browser can use.
+  * `allowed_headers = ["*"]`
+    * `allowed_headers` controls which request headers the browser is allowed to send.
+  * `max_age_seconds = 3000`
+    * `max_age_seconds` controls how long the browser can cache the result of a CORS preflight request.
