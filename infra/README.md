@@ -835,3 +835,24 @@ Resources:
 * [AWS - What's CORS](https://aws.amazon.com/what-is/cross-origin-resource-sharing/)
 * [S3 - Using cross-origin resource sharing (CORS)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cors.html)
 * [Cross-Origin Resource Sharing (CORS)](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/cors.html)
+* [`aws_s3_bucket_cors_configuration` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_cors_configuration)
+
+### `rds.tf`
+
+PostHub uses AWS's default VPC. AWS provisions one in each region, and each includes a default subnet in every Availability Zone. Default subnets are public by default.
+
+Creating an RDS instance requires a DB subnet group: a collection of subnets designated for RDS instances. From that collection, RDS then chooses a subnet and an IP address to associate with the DB instance, which runs in the Availability Zone containing the chosen subnet. Each DB subnet group must have at least one subnet in at least two Availability Zones in the AWS Region (meaning a minimum of two subnets), even for a Single-AZ deployment. That way, you can migrate to Multi-AZ later without reconfiguring your network.
+
+In `rds.tf`, `data.aws_subnets.default` fetches all default subnets in the default VPC (`data.aws_vpc.default.id`, defined in `network.tf`). That list is passed to the `aws_db_subnet_group.postgres` resource to provision the `posthub-db-subnet-group` DB subnet group (the subnets available to the PostHub database).
+
+At a high level, `aws_db_instance.postgres` provisions PostHub's RDS instance (a Postgres database). It attaches the `posthub-db-subnet-group` DB subnet group and the `posthub-rds-sg` security group (defined in `network.tf`), keeps the instance unreachable from the internet (`publicly_accessible = false`), and specifies a Single-AZ deployment (`multi_az = false`).
+
+Worth noting: `publicly_accessible = false` is only half of what keeps the RDS instance private. The other half is the `posthub-rds-sg` security group, which only allows inbound TCP traffic on port 5432 from resources associated with the `posthub-ec2-sg` security group (attached to PostHub's EC2 instance).
+
+Neither the EC2 instance nor the RDS instance is pinned to a specific subnet or Availability Zone, so AWS decides where to place them (for the RDS instance, choosing from the subnets in the DB subnet group). They're in the same VPC, but may land in different AZs. Even so, the EC2 instance can reach the database via the VPC's local route, which is present in every VPC route table and carries traffic between resources within the VPC.
+
+Resources:
+* [Default VPCs](https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html)
+* [Amazon VPC and Amazon RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_VPC.html)
+* [Subnets for your VPC](https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html)
+* [Configure route tables](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html)
