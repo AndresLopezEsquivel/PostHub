@@ -856,3 +856,6 @@ Resources:
 * [Amazon VPC and Amazon RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_VPC.html)
 * [Subnets for your VPC](https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html)
 * [Configure route tables](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html)
+* [`aws_subnets` data source](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets)
+* [`aws_db_subnet_group` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_subnet_group)
+* [`aws_db_instance` resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_instance)
