@@ -60,3 +60,24 @@ since migrations are forward-only.
 
 Image uploads stay dormant locally: with the S3 environment variables unset,
 `POST /api/uploads/presign` answers `503` and posts render without images.
+
+## Getting started (production)
+
+### 1. Provision the AWS infrastructure
+
+From `infra/`, Terraform provisions everything described in the Architecture
+section: the EC2 instance, the RDS database, the private S3 bucket and its
+CloudFront distribution, the security groups, and the instance role.
+
+```bash
+terraform init     # once, and after changing provider versions
+terraform apply    # roughly 10-15 minutes, mostly CloudFront and RDS
+```
+
+`apply` prompts for the RDS master password, which has no default so that nothing
+weak is ever committed. It also needs AWS credentials (see
+[PostHub's Terraform configuration](./infra/README.md) for the prerequisites).
+
+Once it finishes, `terraform output` prints the values the deploy needs: the app
+server's public IP and a ready-made SSH command, the database endpoint, the
+uploads bucket name, and the CloudFront domain.
