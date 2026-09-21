@@ -152,3 +152,24 @@ The two files differ on nearly every key, so layering one over the other would
 mean overriding almost everything the base declared. Keeping each file as the
 complete truth for its own environment is easier to read, and it removes any
 reason to combine them.
+
+### 5. Migrate and seed
+
+RDS starts empty, so the schema has to be applied once before the app is usable.
+
+```bash
+docker compose exec api node dist/db/migrate.js
+docker compose exec api node dist/db/seed.js
+```
+
+These are the compiled entry points, not `npm run migrate`. The production image
+installs no development dependencies, so it has no `tsx` to execute TypeScript
+directly; it ships `dist/` alongside the raw `migrations/*.sql` files the runner
+applies. Both commands run inside the `api` container started in the previous
+step, so the stack has to be up first.
+
+Migrating is a deploy step and never a boot step: the server does not run
+migrations on startup, so a restart never touches the schema. Seeding inserts the
+category reference data that creating a post depends on, and it is idempotent, so
+running it again is safe. There is no production equivalent of `seed:dev`, which
+refuses to run under `NODE_ENV=production`.
