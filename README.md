@@ -173,3 +173,26 @@ migrations on startup, so a restart never touches the schema. Seeding inserts th
 category reference data that creating a post depends on, and it is idempotent, so
 running it again is safe. There is no production equivalent of `seed:dev`, which
 refuses to run under `NODE_ENV=production`.
+
+### 6. Verify the deployment
+
+```bash
+curl -sk https://<app_public_ip>/api/health
+```
+
+A healthy stack answers `{"status":"ok","database":"ok"}`. The `-k` flag skips
+certificate verification, which is necessary because the certificate is
+self-signed. A `503` with `"database":"error"` means the API is up but cannot
+reach RDS.
+
+Then open `https://<app_public_ip>` in a browser and accept the certificate
+warning, which is expected and is the only visible consequence of self-signing.
+Register an account, then reload the page. If the session survives the reload,
+the entire chain described in the Architecture section is working: nginx
+terminated TLS and forwarded `X-Forwarded-Proto`, Express trusted it and issued
+the `Secure` `posthub.sid` cookie, and the session store persisted it in RDS.
+
+If the S3 variables are set, attach an image to a post as a final check. That one
+action exercises the presigned upload, the bucket CORS rule, the instance role
+supplying the signing credentials, and the CloudFront read path, since the image
+only renders if the stored key resolves through the distribution.
