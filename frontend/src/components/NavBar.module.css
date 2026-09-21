@@ -1,0 +1,76 @@
+/* The scaffold's only component stylesheet. CSS Modules scope these class names
+   at build time, so `.bar` here cannot collide with a `.bar` anywhere else — the
+   same locality principle as the backend keeping each service's types beside the
+   code that owns them. Every value comes from styles/tokens.css; components never
+   hardcode a colour or a spacing step. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.logo {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.links a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.links a:hover {
+  color: var(--color-text);
+}
+
+/* React Router adds .active to a NavLink whose route is current. */
+.links a.active {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* The unread badge, tucked against the Notifications link. */
+.badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.4;
+  color: #ffffff;
+  background: var(--color-danger);
+  border-radius: 999px;
+}
+
+.search {
+  display: flex;
+}
+
+.search input {
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.search input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

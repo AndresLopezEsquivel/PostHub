@@ -1,0 +1,36 @@
+/* Avatar — a round image or an initial-in-a-circle fallback. Tokens only. */
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  line-height: 1;
+  overflow: hidden;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: var(--font-size-sm);
+}
+
+.md {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: var(--font-size-base);
+}
+
+.lg {
+  width: 4rem;
+  height: 4rem;
+  font-size: var(--font-size-xl);
+}

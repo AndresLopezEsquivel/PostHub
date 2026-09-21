@@ -1,0 +1,89 @@
+# Development stack — the zero-config local default. Just:
+#
+#   docker compose up --build
+#
+# Everything here is self-contained: a throwaway local Postgres, the backend and
+# frontend running with hot-reload bind mounts, and host ports published so you
+# reach the app at http://localhost:5173. This file stands alone — production is a
+# separate, self-contained docker-compose.prod.yml (NOT an override layered on
+# this one), because the two environments share very little.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # Throwaway local-dev creds, committed on purpose: they unlock only this
+      # disposable local database, so a new contributor gets a working stack with
+      # zero setup. Never carry these into a deployed environment — prod uses RDS
+      # (see docker-compose.prod.yml). The ${VAR:-posthub} form still lets a
+      # git-ignored .env override them locally if you want.
+      POSTGRES_USER: ${POSTGRES_USER:-posthub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-posthub}
+      POSTGRES_DB: ${POSTGRES_DB:-posthub}
+    ports:
+      - "5432:5432"
+    volumes:
+      - posthub_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-posthub} -d ${POSTGRES_DB:-posthub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      # Derived from the POSTGRES_* values above, pointing at the `db` service on
+      # the compose network — one source of truth for the local creds.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-posthub}:${POSTGRES_PASSWORD:-posthub}@db:5432/${POSTGRES_DB:-posthub}
+      # Throwaway local-dev secret, committed on purpose — same rationale as the
+      # posthub/posthub DB creds above: it signs cookies for a disposable local
+      # session store and unlocks nothing real. Prod requires a real value (its
+      # own file has no fallback).
+      SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-secret}
+      # S3 uploads + CloudFront reads. Empty-default ${VAR} forms keep local
+      # `docker compose up` zero-config (unset → uploads dormant 503, images null);
+      # a git-ignored .env lights them up locally if you want to exercise them.
+      S3_BUCKET: ${S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      UPLOAD_URL_TTL: ${UPLOAD_URL_TTL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      target: dev
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume: it keeps the image's npm-ci'd node_modules from being
+      # masked by the host bind mount (the host has no node_modules — there is no
+      # host npm). Renew it with `--renew-anon-volumes` after changing
+      # frontend/package.json.
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+      # Where the Vite dev server forwards /api. `api` is the Compose service
+      # name, resolved on the implicit default network — the same way api reaches
+      # db. Deliberately not VITE_-prefixed: a VITE_ variable is inlined into the
+      # client bundle, and an API host reachable from client code is exactly what
+      # docs/api_design.md forbids.
+      API_PROXY_TARGET: http://api:4000
+    depends_on:
+      - api
+
+volumes:
+  posthub_pgdata:

@@ -1,0 +1,30 @@
+/* The follow/unfollow button. Tokens only (see styles/tokens.css). */
+
+.button {
+  padding: var(--space-1) var(--space-4);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* Following → a quieter "outline" look, so the primary state is "not yet following". */
+.button[aria-pressed='true'] {
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-color: var(--color-border);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}

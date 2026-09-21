@@ -1,0 +1,39 @@
+/* The labelled-input primitive's styling. Tokens only — no hardcoded colour or
+   spacing — so a retheme stays a one-file change (see styles/tokens.css). */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.input {
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* An invalid field's border echoes the error message's colour, so the state reads
+   without relying on the text alone. aria-invalid is set by the component. */
+.input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.error {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}

@@ -1,0 +1,11 @@
+/* Shared centred-column shell for the plain card-list screens (Feed, Bookmarks),
+   which are just a heading over a PostCardList. Tokens only (see styles/tokens.css). */
+
+.page {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}

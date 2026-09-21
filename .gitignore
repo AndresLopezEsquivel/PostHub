@@ -1,1 +1,10 @@
 .DS_Store
+node_modules/
+dist/
+.env
+.env.*.local
+npm-debug.log*
+
+# Self-signed TLS cert + key generated on the deploy instance (see
+# docker-compose.prod.yml). The key is a secret; never commit it.
+certs/

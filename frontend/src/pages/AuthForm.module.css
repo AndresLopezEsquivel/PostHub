@@ -1,0 +1,66 @@
+/* Shared layout for the two anonymous-only forms, Register and Login. They are
+   the same shape — a narrow centred card, a stack of fields, a full-width submit,
+   a form-level error banner, and a link to the sibling screen — so the layout
+   lives once here rather than duplicated per page. Tokens only. */
+
+.page {
+  max-width: 22rem;
+  margin: var(--space-7) auto;
+  padding: 0 var(--space-4);
+}
+
+.heading {
+  margin-bottom: var(--space-2);
+}
+
+/* A one-line note under the heading — the username-is-permanent warning on
+   Register, and any other standing guidance a form needs. */
+.note {
+  margin-bottom: var(--space-5);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The field-less error slot: a wrong-credentials 401 (no `field`) or a transport
+   failure. role="alert" is set on the element in the page so it is announced. */
+.formError {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.submit {
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.submit:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.alt {
+  margin-top: var(--space-5);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
