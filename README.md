@@ -196,3 +196,32 @@ If the S3 variables are set, attach an image to a post as a final check. That on
 action exercises the presigned upload, the bucket CORS rule, the instance role
 supplying the signing credentials, and the CloudFront read path, since the image
 only renders if the stored key resolves through the distribution.
+
+## Testing
+
+Backend and frontend each run Vitest in two projects, unit and integration. The
+tests run inside the containers, against the development stack from the first
+section, so bring it up before running them.
+
+```bash
+docker compose exec api npm run test:setup   # once: create and migrate posthub_test
+docker compose exec api npm test             # backend, both projects
+docker compose exec web npm test             # frontend, both projects
+```
+
+Replace `test` with `test:unit`, `test:integration`, or `test:watch` to run a
+single project or to watch for changes. The frontend also exposes
+`npm run typecheck` for a `tsc --noEmit` pass on its own.
+
+The two projects differ in what they touch. Unit tests sit beside the code they
+cover as `*.test.ts`, mocking the database query helpers on the backend and
+stubbing `fetch` on the frontend, and they run in parallel. Integration tests live
+in `tests/integration/`: the backend drives the real Express app with supertest
+against a dedicated `posthub_test` database, truncating the domain tables before
+each test and running serially since they share one database, while the frontend
+renders the real route table and session provider against mock request handlers,
+so the real fetch wrapper and its error mapping execute.
+
+Tests never touch the development database. The backend's `test` scripts pin
+`DATABASE_URL` to `posthub_test`, and the integration setup refuses any database
+whose name does not end in `_test`.
