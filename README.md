@@ -127,3 +127,28 @@ starting the stack, because nginx refuses to start when `ssl_certificate` points
 at a missing path. The public IP is baked into the certificate's subject
 alternative name, so after every stop and start, regenerate it with the new IP
 and reload the edge with `docker compose -f docker-compose.prod.yml restart web`.
+
+### 4. Build and start the stack
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The `-f` is required every time, because `docker-compose.prod.yml` is not
+Compose's default file and is therefore only used when named. It is also
+self-contained, so there is no second `-f` and no service list to pass.
+
+PostHub keeps two independent Compose files rather than a base file plus an
+override. `docker-compose.yml`, used in the previous section, is the development
+stack: a local Postgres container, bind mounts for hot reload, host ports for all
+three services, and throwaway credentials, so `docker compose up` works with no
+configuration at all. `docker-compose.prod.yml` is the deployed stack: images
+built at the `production` target, `NODE_ENV=production`, no bind mounts, no `db`
+service because the database is RDS, the certificate and `nginx.prod.conf` mounted
+into the nginx edge, only port 443 published, and required secrets with no
+fallbacks.
+
+The two files differ on nearly every key, so layering one over the other would
+mean overriding almost everything the base declared. Keeping each file as the
+complete truth for its own environment is easier to read, and it removes any
+reason to combine them.
