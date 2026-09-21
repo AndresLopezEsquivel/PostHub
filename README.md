@@ -40,7 +40,7 @@ To avoid using long-term static AWS credentials in the backend, we use an instan
 
 ## Getting started (development)
 
-Docker is the only prerequisite — there is no host Node or npm. No `.env` file is
+Docker is the only prerequisite: there is no host Node or npm. No `.env` file is
 needed either: `docker-compose.yml` falls back to throwaway local credentials.
 
 ```bash
@@ -81,3 +81,24 @@ weak is ever committed. It also needs AWS credentials (see
 Once it finishes, `terraform output` prints the values the deploy needs: the app
 server's public IP and a ready-made SSH command, the database endpoint, the
 uploads bucket name, and the CloudFront domain.
+
+### 2. Configure the environment
+
+SSH onto the app server (`terraform output -raw app_ssh`), clone the repository,
+and copy `.env.example` to a root `.env`. Compose auto-loads it, and it is
+git-ignored. `docker-compose.prod.yml` has no fallbacks.
+
+```
+DATABASE_URL=postgresql://<user>:<password>@<db_endpoint>/<db_name>
+SESSION_SECRET=<openssl rand -hex 32>
+S3_BUCKET=<uploads_bucket>
+AWS_REGION=us-east-1
+S3_PUBLIC_BASE_URL=https://<cloudfront_domain>
+```
+
+Every placeholder except the session secret comes from `terraform output`; note
+that `db_endpoint` already includes the port.
+
+Notice what is absent: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are never
+set here. The instance role supplies the backend's credentials through instance
+metadata, so no long-lived AWS keys exist on the box.
