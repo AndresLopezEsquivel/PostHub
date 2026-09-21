@@ -15,7 +15,7 @@ resource "aws_db_subnet_group" "postgres" {
 resource "aws_db_instance" "postgres" {
   identifier = "posthub-db"
 
-  engine = "postgres"
+  engine         = "postgres"
   engine_version = "16"
 
   instance_class    = var.db_instance_class

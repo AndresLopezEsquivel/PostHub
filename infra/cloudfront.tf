@@ -13,8 +13,8 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 
 # --- 2. The distribution ---------------------------------------------------
 resource "aws_cloudfront_distribution" "uploads" {
-  enabled = true
-  comment = "PostHub uploads (post images + avatars)"
+  enabled     = true
+  comment     = "PostHub uploads (post images + avatars)"
   price_class = "PriceClass_100"
 
   origin {
@@ -24,11 +24,11 @@ resource "aws_cloudfront_distribution" "uploads" {
   }
 
   default_cache_behavior {
-    target_origin_id = "uploads-s3"
-    allowed_methods = ["GET", "HEAD"]
-    cached_methods  = ["GET", "HEAD"]
+    target_origin_id       = "uploads-s3"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
     viewer_protocol_policy = "redirect-to-https"
-    cache_policy_id = data.aws_cloudfront_cache_policy.caching_optimized.id
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
   }
 
   restrictions {
@@ -45,8 +45,8 @@ resource "aws_cloudfront_distribution" "uploads" {
 # --- 3. The bucket policy --------------------------------------------------
 data "aws_iam_policy_document" "uploads_cloudfront_read" {
   statement {
-    sid     = "AllowCloudFrontRead"
-    actions = ["s3:GetObject"]
+    sid       = "AllowCloudFrontRead"
+    actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.uploads.arn}/*"]
 
     principals {
@@ -63,7 +63,7 @@ data "aws_iam_policy_document" "uploads_cloudfront_read" {
 }
 
 resource "aws_s3_bucket_policy" "uploads" {
-  bucket = aws_s3_bucket.uploads.id
-  policy = data.aws_iam_policy_document.uploads_cloudfront_read.json
+  bucket     = aws_s3_bucket.uploads.id
+  policy     = data.aws_iam_policy_document.uploads_cloudfront_read.json
   depends_on = [aws_s3_bucket_public_access_block.uploads]
 }
