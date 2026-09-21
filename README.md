@@ -102,3 +102,28 @@ that `db_endpoint` already includes the port.
 Notice what is absent: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are never
 set here. The instance role supplies the backend's credentials through instance
 metadata, so no long-lived AWS keys exist on the box.
+
+### 3. Generate the TLS certificate
+
+Nginx terminates TLS with a self-signed certificate generated on the instance.
+It is self-signed because the app is reached at the EC2 instance's raw public IP:
+there is no domain name to prove ownership of, and no Elastic IP, so the address
+changes every time the instance stops and starts. What this deployment needs from
+TLS is termination, not trust. Terminating TLS is what lets nginx forward
+`X-Forwarded-Proto: https`, the first link in the chain that produces a `Secure`
+session cookie. A publicly trusted certificate would add trust, and trust has no
+bearing on that mechanism.
+
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout certs/key.pem -out certs/cert.pem -days 365 \
+  -subj "/CN=posthub" -addext "subjectAltName=IP:<app_public_ip>"
+chmod 600 certs/key.pem
+```
+
+`certs/` is git-ignored, since the key is a secret. Generate the files before
+starting the stack, because nginx refuses to start when `ssl_certificate` points
+at a missing path. The public IP is baked into the certificate's subject
+alternative name, so after every stop and start, regenerate it with the new IP
+and reload the edge with `docker compose -f docker-compose.prod.yml restart web`.
