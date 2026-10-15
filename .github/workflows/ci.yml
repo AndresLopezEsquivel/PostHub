@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Show what the runner sees
+        run: |
+          echo "Triggered by: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
+          ls -la
