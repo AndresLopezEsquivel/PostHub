@@ -29,15 +29,14 @@ Resources to dive deeper into:
 
 * [Understanding GitHub Actions](https://docs.github.com/en/actions/get-started/understand-github-actions)
 * [Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
-* [GitHub Marketplace: actions](https://github.com/marketplace?type=actions), the catalogue of published actions
 * [GitHub's official actions](https://github.com/actions), such as `checkout`, `setup-node`, and `cache`
 
 ### What gets tested on a pull request
 
 On a pull request, the runner does not check out the branch's latest commit.
 GitHub creates a temporary merge commit of the branch into `main` and tests that,
-so a green check means the code still works *after* merging. That is why the
-commit SHA printed by the workflow differs from the one at the tip of the branch.
+so a green check means the code still works *after* merging. That is why
+`github.sha` on a pull request run differs from the commit at the tip of the branch.
 
 Resources to dive deeper into:
 
@@ -45,11 +44,30 @@ Resources to dive deeper into:
 
 ### Expressions: `${{ ... }}`
 
-`${{ github.event_name }}` and `${{ github.sha }}` are expressions. GitHub replaces
-them with their values *before* the shell command runs, so the command the shell
-sees already contains the text. Because of this, untrusted values such as a pull
-request title should never be placed inside `${{ }}` in a `run:` step: whoever
-writes that text could inject shell commands.
+An expression is a value GitHub computes from the run's context before using it.
+Expressions can appear in most keys of a workflow. For example, the `concurrency`
+group (explained below) is built from two of them:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+```
+
+On a pull request from the `ci-pipeline` branch, the group becomes
+`CI-ci-pipeline`.
+
+Inside a `run:` step, GitHub replaces expressions *before* the shell command
+runs:
+
+```yaml
+- run: echo "Triggered by ${{ github.event_name }} at commit ${{ github.sha }}"
+```
+
+On a pull request, the shell receives
+`echo "Triggered by pull_request at commit 1a2b3c..."` and never sees the
+expression. Because of this, untrusted values such as a pull request title
+should never be placed inside `${{ }}` in a `run:` step: whoever writes that
+text could inject shell commands.
 
 Resources to dive deeper into:
 
@@ -117,3 +135,168 @@ Resources to dive deeper into:
 * [Workflow syntax: `concurrency`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency)
 * [Control workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 * [Contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts), the values available in `github.*`
+
+## Checking the infrastructure code: the Terraform job
+
+The `terraform` job checks the Terraform code in `infra/` without an AWS account:
+it never reads real infrastructure, needs no credentials, and changes nothing.
+
+```yaml
+terraform:
+  name: Terraform
+  runs-on: ubuntu-latest
+  defaults:
+    run:
+      working-directory: infra
+  steps:
+    - name: Check out the repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      with:
+        terraform_version: 1.15.9
+        terraform_wrapper: false
+
+    - name: Check formatting
+      run: terraform fmt -check -diff -recursive
+
+    - name: Initialise without a backend
+      run: terraform init -backend=false -input=false -lockfile=readonly
+
+    - name: Validate the configuration
+      run: terraform validate
+```
+
+`name: Terraform` is the job's display name, which is also the name of the check
+shown on a pull request.
+
+### Actions from the Marketplace
+
+An action is a repository with an `action.yml` file that declares its inputs and
+the code it runs. The GitHub Marketplace is a catalogue of such repositories.
+Inputs are passed with `with:`, much like function arguments.
+
+* **`actions/checkout`** clones the repository into the runner's workspace. By
+  default it fetches only the triggering commit (`fetch-depth: 1`) and leaves the
+  job's `GITHUB_TOKEN` in `.git/config` so later steps can run authenticated `git`
+  commands.
+* **`hashicorp/setup-terraform`** downloads the Terraform CLI and adds it to the
+  `PATH`. By default it also installs a **wrapper script**: a small program named
+  `terraform` that runs the real binary and saves its output and exit code as
+  step outputs, for later steps to read (for example, to post a `plan` as a
+  pull request comment).
+
+**PostHub's choice:**
+
+* `persist-credentials: false`: nothing in the job runs `git`, so the token is
+  not left on disk for later steps to pick up.
+* `terraform_version: 1.15.9`: the default, `latest`, could break the build the
+  day a new Terraform release changes behaviour, with no change in the code. The
+  pinned version matches the one used locally, so CI and the developer format
+  the code identically. Both are upgraded together.
+* `terraform_wrapper: false`: no step reads Terraform's output, so the wrapper
+  would only add a layer between the job and Terraform.
+
+Resources to dive deeper into:
+
+* [GitHub Marketplace: actions](https://github.com/marketplace?type=actions), the catalogue of published actions
+* [About custom actions](https://docs.github.com/en/actions/concepts/workflows-and-actions/custom-actions)
+* [Metadata syntax for `action.yml`](https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax)
+* [`actions/checkout`](https://github.com/actions/checkout), its source and inputs
+* [`hashicorp/setup-terraform`](https://github.com/hashicorp/setup-terraform), its source and inputs; the [usage section](https://github.com/hashicorp/setup-terraform#usage) covers the wrapper
+
+### Pinning actions by commit SHA
+
+The text after `@` in `uses:` is a git reference in the action's repository:
+
+| Reference | Example | Can it change? |
+| --- | --- | --- |
+| Branch | `@main` | Yes, with every push |
+| Tag | `@v4`, `@v4.0.1` | Yes, a tag is a movable pointer |
+| Commit SHA | `@dfe3c3f8...` (40 characters) | No, the SHA is a hash of the commit's content |
+
+An action runs with access to the job's files and token, so a tag that is
+repointed to malicious code reaches every workflow using it on its next run.
+This happened in March 2025 to `tj-actions/changed-files`: its tags were
+repointed to a commit that printed CI secrets into build logs. Workflows pinned
+to a SHA kept running the previous code.
+
+**PostHub's choice:** both actions are pinned to a full SHA, with the version
+as a comment for human readers. A pin never updates itself, so new versions must
+be adopted deliberately; Dependabot can automate this by opening a pull request
+that updates both the SHA and the comment.
+
+Resources to dive deeper into:
+
+* [Secure use reference: using third-party actions](https://docs.github.com/en/actions/reference/security/secure-use)
+* [Workflow syntax: `jobs.<job_id>.steps[*].uses`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsuses)
+* [Keeping your actions up to date with Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot)
+* [GHSA-mrrh-fwg8-r2c3](https://github.com/advisories/GHSA-mrrh-fwg8-r2c3), the `tj-actions/changed-files` advisory (CVE-2025-30066)
+
+### Running in `infra/`: `working-directory`
+
+Every `run:` step starts in the workspace root, but the Terraform code lives in
+`infra/`. The working directory can be set on a single step
+(`working-directory:`), for a whole job, or for the whole workflow
+(`defaults.run.working-directory`). The most specific setting wins. It applies
+only to `run:` steps; actions in `uses:` steps decide for themselves where they
+work.
+
+**PostHub's choice:** the job-level default, since every command in this job is
+a Terraform command in `infra/`. A workflow-level default would be wrong: other
+jobs run from the repository root. Terraform's own `-chdir=infra` flag would
+also work, but it must be repeated on every command.
+
+Resources to dive deeper into:
+
+* [Workflow syntax: `jobs.<job_id>.defaults.run`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_iddefaultsrun)
+* [Workflow syntax: `jobs.<job_id>.steps[*].working-directory`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsworking-directory)
+* [Terraform: switching working directory with `-chdir`](https://developer.hashicorp.com/terraform/cli/commands#switching-working-directory-with-chdir)
+
+### The three checks
+
+1. **`terraform fmt -check -diff -recursive`** checks that every file follows
+   Terraform's canonical style (indentation, aligned `=`, spacing).
+   * `-check` changes nothing and exits with a non-zero code if any file needs
+     formatting, which fails the step.
+   * `-diff` prints the exact change needed in the log.
+   * `-recursive` includes subdirectories, which are skipped by default.
+
+   It runs first because it needs no downloads, so a formatting mistake fails in
+   seconds. To fix a failure, run `terraform fmt -recursive` in `infra/` and
+   commit the result.
+2. **`terraform init -backend=false -input=false -lockfile=readonly`** downloads
+   the AWS provider, which `validate` needs: the provider's schema defines which
+   resources and arguments exist.
+   * `-backend=false` skips connecting to where state is stored. `infra/` stores
+     state locally today, but if a remote backend such as S3 is added, plain
+     `init` would need AWS credentials, which a syntax check should never have.
+   * `-input=false` makes Terraform fail instead of waiting for input that no
+     one can type.
+   * `-lockfile=readonly` makes `init` fail rather than change
+     `.terraform.lock.hcl`, so CI only ever uses the provider versions and
+     checksums committed in the lock file. To fix a failure, run `terraform init`
+     locally (with `-upgrade` after changing a version constraint) and commit
+     the lock file.
+3. **`terraform validate`** checks that the configuration is consistent with
+   itself and with the provider's schema: references point to things that are
+   declared, arguments exist, and values have the right types. Each error
+   names the file and line, often with a "Did you mean" suggestion.
+
+### What this job does not check
+
+`validate` checks structure, not the real world. It cannot know whether an AMI
+exists, whether an S3 bucket name is taken, or whether IAM allows an action.
+Those only surface in `terraform plan` or `apply`, which need AWS credentials
+and are outside this pipeline while the infrastructure is not deployed.
+
+Resources to dive deeper into:
+
+* [`terraform fmt`](https://developer.hashicorp.com/terraform/cli/commands/fmt)
+* [Terraform style guide](https://developer.hashicorp.com/terraform/language/style)
+* [`terraform init`](https://developer.hashicorp.com/terraform/cli/commands/init)
+* [Dependency lock file](https://developer.hashicorp.com/terraform/language/files/dependency-lock)
+* [`terraform validate`](https://developer.hashicorp.com/terraform/cli/commands/validate)
