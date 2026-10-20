@@ -144,7 +144,7 @@ it never reads real infrastructure, needs no credentials, and changes nothing.
 ```yaml
 terraform:
   name: Terraform
-  runs-on: ubuntu-latest
+  runs-on: ubuntu-26.04
   defaults:
     run:
       working-directory: infra
@@ -209,6 +209,16 @@ Resources to dive deeper into:
 * [`hashicorp/setup-terraform`](https://github.com/hashicorp/setup-terraform), its source and inputs; the [usage section](https://github.com/hashicorp/setup-terraform#usage) covers the wrapper
 
 ### Pinning actions by commit SHA
+
+To *pin* a dependency is to fix it to an exact version, so it changes only when
+someone edits the reference. The opposite is a *floating* reference, which can
+point to something different over time without any edit, such as
+`terraform_version: latest` or `runs-on: ubuntu-latest`. Pins differ in how
+tight they are: a commit SHA always means exactly the same code, while a runner
+label such as `ubuntu-26.04` fixes the OS version but not every package on it
+(see [Choosing the runner OS](#choosing-the-runner-os-runs-on)). Lock files pin
+in the same sense: `package-lock.json` for npm packages and
+`.terraform.lock.hcl` for the AWS provider.
 
 The text after `@` in `uses:` is a git reference in the action's repository:
 
@@ -300,3 +310,188 @@ Resources to dive deeper into:
 * [`terraform init`](https://developer.hashicorp.com/terraform/cli/commands/init)
 * [Dependency lock file](https://developer.hashicorp.com/terraform/language/files/dependency-lock)
 * [`terraform validate`](https://developer.hashicorp.com/terraform/cli/commands/validate)
+
+## Building the production images: the images job
+
+The `images` job builds the `production` stage of both Dockerfiles, the images
+that would be deployed.
+
+```yaml
+images:
+  name: Image (${{ matrix.service }})
+  runs-on: ubuntu-26.04
+  strategy:
+    fail-fast: false
+    matrix:
+      service: [backend, frontend]
+  steps:
+    - name: Check out the repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Build the production image
+      run: docker build --target production --tag posthub-${{ matrix.service }}:ci ${{ matrix.service }}
+```
+
+It appears on a pull request as two checks, `Image (backend)` and
+`Image (frontend)`, next to `Terraform`.
+
+### Parallel jobs and `needs`
+
+Jobs in a workflow run at the same time by default, each on its own fresh
+virtual machine. They share no files, tools, or Docker images, which is why
+every job starts with its own checkout.
+
+`needs` makes a job wait for another:
+
+```yaml
+jobs:
+  deploy:
+    needs: build   # starts only after build succeeds
+```
+
+It does two things: it orders the jobs, and it skips the dependent job when the
+one it needs fails. That suits work that must happen in sequence, such as
+deploying only after the build and tests pass.
+
+**PostHub's choice:** no `needs`. The checks are independent: whether the
+Terraform code is formatted has nothing to do with whether the images build.
+Running them in parallel means:
+
+* The run takes as long as the slowest job, not the sum of all jobs.
+* Every failure shows up in the same run. With `needs`, a second failure would
+  only appear after fixing the first.
+* Each job is its own check on the pull request.
+
+Resources to dive deeper into:
+
+* [Using jobs in a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs)
+* [Workflow syntax: `jobs.<job_id>.needs`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds)
+
+### Steps or jobs?
+
+`needs` orders jobs but does not put them on the same machine: a dependent job
+starts on a new VM, without anything the earlier job produced. Results have to
+be passed on explicitly:
+
+| What to pass | Mechanism | Example |
+| --- | --- | --- |
+| A short string | Job `outputs`: written to `$GITHUB_OUTPUT`, read as `needs.<job>.outputs.<name>` | A version number or image tag |
+| Files | Artifacts: `actions/upload-artifact`, then `actions/download-artifact` | A compiled `dist/` or a test report |
+| A Docker image | A registry: push, then pull | Build an image, then deploy it |
+
+When tasks share files or running processes, steps in one job are simpler and
+faster: no second VM to start and nothing to transfer. Separate jobs are worth
+it when the parts need a different machine (another OS, more memory), different
+permissions or secrets (a deploy job holding cloud credentials), should run in
+parallel, or should be visible and re-runnable on their own.
+
+Resources to dive deeper into:
+
+* [Passing information between jobs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs)
+* [Workflow syntax: `jobs.<job_id>.outputs`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idoutputs)
+* [Storing and sharing data from a workflow](https://docs.github.com/en/actions/tutorials/store-and-share-data)
+* [`actions/upload-artifact`](https://github.com/actions/upload-artifact)
+* [GitHub-hosted runners](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners)
+
+### One job, two images: `strategy.matrix`
+
+The two builds differ only in the folder, so the job is written once with a
+matrix. GitHub expands it into one job per value, `backend` and `frontend`,
+each on its own VM and in parallel. Steps read the current value with
+`${{ matrix.service }}`. Here it is safe to use in `run:`, since the values come
+from the workflow itself, not from user input. With several variables, the
+matrix runs every combination, and `include` and `exclude` add or remove
+combinations.
+
+**PostHub's choice:**
+
+* `fail-fast: false`. The default, `true`, cancels the remaining jobs as soon as
+  one fails. That would hide whether the other image also builds.
+* An explicit `name:` containing the matrix value, so the check names are
+  predictable when choosing which checks are required.
+* `max-parallel` is left at its default (no limit), since there are only two
+  jobs.
+
+Resources to dive deeper into:
+
+* [Running variations of jobs in a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)
+* [Workflow syntax: `jobs.<job_id>.strategy.matrix`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymatrix)
+* [Workflow syntax: `include`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymatrixinclude) and [`exclude`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymatrixexclude)
+* [Workflow syntax: `fail-fast`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategyfail-fast)
+* [Workflow syntax: `max-parallel`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymax-parallel)
+
+### What the build proves
+
+`docker-compose.yml` builds the `dev` stage, which copies the source and
+compiles nothing. Only the `build` stage compiles, and only `production` uses
+it, so without this job a change could pass every test and still break the
+image that would be deployed. A successful build shows that:
+
+* `npm ci` installs exactly what the lock file lists, on a clean machine.
+* The code compiles: `tsc` for the backend; `tsc --noEmit` and `vite build` for
+  the frontend.
+* The final stage assembles: `npm ci --omit=dev`, `dist/` and `migrations/` for
+  the backend; `nginx.conf` and the bundle for the frontend.
+* `.dockerignore` does not exclude anything the build needs.
+
+It does not show that the containers start, that the app works (the test job's
+role), or that `nginx.conf` is valid, since nginx reads it only at startup.
+
+### `docker build` or `docker/build-push-action`
+
+Docker is preinstalled on GitHub's Ubuntu runners, so a `run:` step can call
+`docker build` directly. Docker's official action, `docker/build-push-action`
+(usually with `docker/setup-buildx-action`), adds pushing to a registry,
+multi-platform builds, and layer caching between runs through the GitHub
+Actions cache (`type=gha`).
+
+**PostHub's choice:** plain `docker build`, the same command
+[docs/docker.md](docker.md) uses. Nothing is pushed while the infrastructure is
+not deployed, and it adds no third-party action to pin. The cost is no cache:
+every run builds from scratch, including `npm ci`. The action becomes worth it
+once images are pushed or build time starts to matter.
+
+Resources to dive deeper into:
+
+* [Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
+* [`docker build` reference](https://docs.docker.com/reference/cli/docker/buildx/build/)
+* [Docker build with GitHub Actions](https://docs.docker.com/build/ci/github-actions/)
+* [`docker/build-push-action`](https://github.com/docker/build-push-action)
+* [GitHub Actions cache backend](https://docs.docker.com/build/cache/backends/gha/)
+
+### Choosing the runner OS: `runs-on`
+
+`runs-on` takes a label that selects a runner image: an OS plus preinstalled
+tools. `ubuntu-latest` is an alias that GitHub moves to each new LTS. From
+October 19 to November 19, 2026 it moves from Ubuntu 24.04 to 26.04, so during
+that window two runs of the same commit can land on different systems.
+`ubuntu-24.04` and `ubuntu-26.04` are fixed versions.
+
+The images job depends on the runner's Docker, which differs between the two
+(versions as of October 2026):
+
+| Tool | `ubuntu-24.04` | `ubuntu-26.04` |
+| --- | --- | --- |
+| Docker | 28.0.4 | 29.4.2 |
+| Docker Compose | 2.38.2 | 5.1.3 |
+
+A label is a looser pin than a SHA: GitHub rebuilds the images about weekly
+with patches and minor tool updates. It fixes the OS and the major tool
+versions, not every package.
+
+**PostHub's choice:** `ubuntu-26.04` on every job. Results do not depend on
+which OS a run lands on, it matches the other pins, and its Docker and Compose
+major versions match a current local setup. The Terraform job installs its own
+Terraform and would work on either image; it uses the same label to keep the
+workflow uniform. The label needs a manual bump at the next LTS, which GitHub
+announces in the runner-images repository.
+
+Resources to dive deeper into:
+
+* [Workflow syntax: `jobs.<job_id>.runs-on`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idruns-on)
+* [GitHub-hosted runners](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners)
+* [`ubuntu-latest` migration to Ubuntu 26.04](https://github.com/actions/runner-images/issues/14748)
+* [Ubuntu 26.04 image software](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md)
+* [Ubuntu 24.04 image software](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md)
