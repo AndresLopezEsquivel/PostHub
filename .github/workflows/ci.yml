@@ -15,7 +15,7 @@ concurrency:
 jobs:
   terraform:
     name: Terraform
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: infra
@@ -39,3 +39,19 @@ jobs:
 
       - name: Validate the configuration
         run: terraform validate
+
+  images:
+    name: Image (${{ matrix.service }})
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, frontend]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the production image
+        run: docker build --target production --tag posthub-${{ matrix.service }}:ci ${{ matrix.service }}
