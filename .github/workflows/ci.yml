@@ -16,6 +16,7 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: infra
@@ -43,6 +44,7 @@ jobs:
   images:
     name: Image (${{ matrix.service }})
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -59,7 +61,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
