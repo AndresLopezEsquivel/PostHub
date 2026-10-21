@@ -55,3 +55,33 @@ jobs:
 
       - name: Build the production image
         run: docker build --target production --tag posthub-${{ matrix.service }}:ci ${{ matrix.service }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start the development stack
+        run: docker compose up --detach --build --wait
+
+      - name: Create and migrate the test database
+        run: docker compose exec -T api npm run test:setup
+
+      - name: Run the backend tests
+        run: docker compose exec -T api npm test
+
+      - name: Run the frontend tests
+        run: docker compose exec -T web npm test
+
+      - name: Show the container logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop the stack and remove its volumes
+        if: always()
+        run: docker compose down --volumes
