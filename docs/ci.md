@@ -74,7 +74,7 @@ Resources to dive deeper into:
 * [Expressions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions), the `${{ }}` syntax and its operators
 * [Script injections](https://docs.github.com/en/actions/concepts/security/script-injections)
 
-## Limiting the workflow: `permissions` and `concurrency`
+## Limiting the workflow: `permissions`, `concurrency` and `timeout-minutes`
 
 ### `permissions`: least privilege for the token
 
@@ -136,6 +136,35 @@ Resources to dive deeper into:
 * [Control workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 * [Contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts), the values available in `github.*`
 
+### `timeout-minutes`: capping each job
+
+A job that hangs keeps running until it hits the default limit of 360 minutes
+(6 hours). A test waiting on a connection that never opens, or a download that
+stalls, would hold a runner the whole time. On a private repository, that would
+also spend 360 of the 2,000 free minutes a month in a single run. Even when the
+minutes are free, a failure that takes six hours to appear is a slow failure.
+
+`timeout-minutes` cancels the job after the given number of minutes and marks
+it as failed. Unlike `permissions` and `concurrency`, it has no workflow-level
+form: it is set per job (or per step), and `defaults` cannot carry it. In a
+matrix job, it applies to each matrix job separately.
+
+**PostHub's choice:** `timeout-minutes: 10` on every job. On the runner, the
+slowest job, the test job, takes about 80 seconds (stack start 39 s, backend
+tests 13 s, frontend tests 16 s), and the others finish in under 30 seconds.
+The same test steps took about 6 minutes on a development laptop, so run times
+vary a lot from machine to machine. 10 minutes leaves room for a slow runner
+while still failing a hang 36 times sooner than the default. The Terraform and
+image jobs need the cap too: downloading Terraform, its providers, base images
+and npm packages are all network calls that can hang. If a job grows, raise
+its limit as needed.
+
+Resources to dive deeper into:
+
+* [Workflow syntax: `jobs.<job_id>.timeout-minutes`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)
+* [Workflow syntax: `defaults`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#defaults)
+* [Actions limits](https://docs.github.com/en/actions/reference/limits)
+
 ## Checking the infrastructure code: the Terraform job
 
 The `terraform` job checks the Terraform code in `infra/` without an AWS account:
@@ -145,6 +174,7 @@ it never reads real infrastructure, needs no credentials, and changes nothing.
 terraform:
   name: Terraform
   runs-on: ubuntu-26.04
+  timeout-minutes: 10
   defaults:
     run:
       working-directory: infra
@@ -320,6 +350,7 @@ that would be deployed.
 images:
   name: Image (${{ matrix.service }})
   runs-on: ubuntu-26.04
+  timeout-minutes: 10
   strategy:
     fail-fast: false
     matrix:
@@ -495,3 +526,162 @@ Resources to dive deeper into:
 * [`ubuntu-latest` migration to Ubuntu 26.04](https://github.com/actions/runner-images/issues/14748)
 * [Ubuntu 26.04 image software](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md)
 * [Ubuntu 24.04 image software](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md)
+
+## Running the tests: the test job
+
+The `test` job starts the development stack with Docker Compose and runs both
+test suites inside the containers, the same way the README describes.
+
+```yaml
+test:
+  name: Test
+  runs-on: ubuntu-26.04
+  timeout-minutes: 10
+  steps:
+    - name: Check out the repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Start the development stack
+      run: docker compose up --detach --build --wait
+
+    - name: Create and migrate the test database
+      run: docker compose exec -T api npm run test:setup
+
+    - name: Run the backend tests
+      run: docker compose exec -T api npm test
+
+    - name: Run the frontend tests
+      run: docker compose exec -T web npm test
+
+    - name: Show the container logs
+      if: failure()
+      run: docker compose logs
+
+    - name: Stop the stack and remove its volumes
+      if: always()
+      run: docker compose down --volumes
+```
+
+### A multi-container stack in CI
+
+Docker and Compose come preinstalled on GitHub's Ubuntu runners, so the job
+needs no setup action. `docker compose up` reads `docker-compose.yml` as written
+and starts `db`, `api` and `web` on the `dev` target. Three flags matter here:
+
+* `--detach` hands control back once the containers start. Without it, `up`
+  stays attached to the logs and the step never ends.
+* `--build` builds the images from the checked-out code. Each job gets a fresh
+  machine, so there is no image cache from earlier runs.
+* `--wait` returns only when every container is running and `db` passes its
+  `pg_isready` healthcheck, so the next step never finds Postgres still
+  starting.
+
+The `posthub_pgdata` volume starts empty on every run, and the committed
+`${VAR:-posthub}` defaults apply because the runner has no `.env`. Every run
+starts from the same state.
+
+GitHub's own approach is **service containers** (`jobs.<job_id>.services`):
+Postgres runs next to the job, and the tests run with Node directly on the
+runner. That is the more common pattern.
+
+**PostHub's choice:** Compose. The test scripts hardcode the `db` host in
+`DATABASE_URL`, and only the Compose network resolves that name. Compose also
+checks that the README's `docker compose up` works on a clean machine. The cost
+is time: building the dev images is slower than installing Node packages
+directly.
+
+Resources to dive deeper into:
+
+* [Docker Compose `up` reference](https://docs.docker.com/reference/cli/docker/compose/up/)
+* [Using Docker service containers](https://docs.github.com/en/actions/tutorials/use-containerized-services/use-docker-service-containers)
+* [GitHub-hosted runner images](https://github.com/actions/runner-images)
+
+### Running commands in a container: `exec -T`
+
+`docker compose exec` runs a command in a container that is already running,
+with its files, its `node_modules`, and its place on the Compose network.
+`docker compose run` would start a new one-off container instead, which isn't
+needed when `up` has already started the stack.
+
+By default, `exec` allocates a pseudo-terminal (TTY), which is what makes an
+interactive session work locally. A runner has no terminal attached, and `-T`
+turns the TTY off. That avoids errors such as `the input device is not a TTY`,
+and it keeps stdout and stderr separate in the run log.
+
+`exec` exits with the command's own exit code. A failing test makes `vitest`
+exit 1, so `docker compose exec` exits 1, the step fails, and the job goes red.
+
+**PostHub's choice:** every command in the test job uses
+`docker compose exec -T <service> ...`.
+
+Resources to dive deeper into:
+
+* [Docker Compose `exec` reference](https://docs.docker.com/reference/cli/docker/compose/exec/)
+* [Docker Compose `run` reference](https://docs.docker.com/reference/cli/docker/compose/run/)
+* [Workflow syntax: `jobs.<job_id>.steps[*].shell`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsshell)
+
+### What the job runs
+
+Each command is its own step, so the run page shows a separate log, duration
+and result for each one:
+
+1. `test:setup` creates `posthub_test` and runs the migrations on it. On a
+   fresh volume, the database does not exist yet, so the README's one-time step
+   runs on every CI run. The script is idempotent.
+2. The backend suite runs its unit tests, then its integration tests against
+   `posthub_test` with supertest.
+3. The frontend suite runs its unit tests, then its integration tests against
+   MSW. It needs neither `db` nor `api`, but it runs in `web` because that is
+   where the frontend's `node_modules` live.
+
+A failing step skips the steps after it, so a red backend suite means the
+frontend tests do not run in that job.
+
+**PostHub's choice:** no separate typecheck steps. Vitest strips types without
+checking them, so a typecheck has to run somewhere. The images job already runs
+one: `npm run build` runs `tsc` with the same `tsconfig.json` for both the
+backend and the frontend. Repeating it here would run the same check twice.
+
+Resources to dive deeper into:
+
+* [Vitest: getting started (TypeScript support)](https://vitest.dev/guide/)
+* [Vitest: test projects](https://vitest.dev/guide/projects)
+
+### Steps that run anyway: `if: always()` and `if: failure()`
+
+Every step has an implicit `if: success()`: once a step fails, the following
+steps are skipped. Status check functions change that:
+
+| Function | The step runs when... |
+| --- | --- |
+| `success()` (default) | all previous steps succeeded |
+| `failure()` | a previous step failed |
+| `cancelled()` | the run was cancelled |
+| `always()` | in every case, including after a cancellation |
+
+GitHub recommends `if: ${{ !cancelled() }}` for most "run anyway" steps,
+because a step under `always()` that hangs can hold up a cancellation.
+`docker compose down` is quick and safe to run after a cancellation, so
+`always()` fits it.
+
+On a GitHub-hosted runner, the machine is destroyed after the job, together
+with its containers and volumes, so teardown is not strictly needed. It matters
+on a self-hosted runner, which is reused: leftover containers would hold port
+5432, and a leftover volume would carry data into the next run.
+
+**PostHub's choice:** two steps that run outside the normal flow:
+
+* `docker compose logs` with `if: failure()`. When `api` crashes or a test
+  fails because of the database, the container logs explain why, and the run
+  log is the only place they survive once the machine is gone.
+* `docker compose down --volumes` with `if: always()`. It costs a few seconds,
+  and the job stays correct if it ever moves to a reused machine.
+
+Resources to dive deeper into:
+
+* [Expressions: status check functions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions)
+* [Workflow syntax: `jobs.<job_id>.steps[*].if`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsif)
+* [Docker Compose `logs` reference](https://docs.docker.com/reference/cli/docker/compose/logs/)
+* [Docker Compose `down` reference](https://docs.docker.com/reference/cli/docker/compose/down/)
