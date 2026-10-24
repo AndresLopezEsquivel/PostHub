@@ -1,5 +1,7 @@
 # PostHub
 
+[![CI](https://github.com/AndresLopezEsquivel/PostHub/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/AndresLopezEsquivel/PostHub/actions/workflows/ci.yml)
+
 PostHub is a full-stack social publishing platform where users can write posts, follow authors, and like, bookmark, and comment on posts. The platform uses Nginx as a reverse proxy and was built with Node.js, Express, TypeScript, React, and PostgreSQL. It is containerized with Docker and deployed on AWS infrastructure provisioned with Terraform, including an EC2 instance, an RDS database, a CloudFront distribution for serving objects from a private S3 bucket, and an EC2 instance role that generates presigned S3 upload URLs (eliminating the need for static credentials), among other AWS resources.
 
 <figure>
@@ -12,9 +14,10 @@ PostHub is a full-stack social publishing platform where users can write posts, 
   <figcaption><small>Figure 2: PostHub AWS Architecture</small></figcaption>
 </figure>
 
-For more information on PostHub's Docker and Terraform configurations, check out:
+For more information on PostHub's Docker, Terraform, and CI configurations, check out:
 * [PostHub's Docker configuration](./docs/docker.md)
 * [PostHub's Terraform configuration](./infra/README.md)
+* [PostHub's CI pipeline](./docs/ci.md)
 
 ## Architecture
 
