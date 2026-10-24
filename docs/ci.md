@@ -1110,3 +1110,86 @@ re-run of the same commit would fail the same way.
 Resources to dive deeper into:
 
 * [`gh run rerun` manual](https://cli.github.com/manual/gh_run_rerun)
+
+## Showing the status: the README badge
+
+The top of the README shows a badge with the result of the latest CI run on
+`main`. GitHub generates the image itself: every workflow has an SVG endpoint
+that reads "passing", "failing" or "no status". The README only embeds it, so
+there is nothing to install and no token. This works because the repository is
+public; badges of private repositories cannot be viewed from outside.
+
+### The badge URL
+
+The URL is built from the workflow's file name:
+
+```text
+https://github.com/AndresLopezEsquivel/PostHub/actions/workflows/ci.yml/badge.svg
+```
+
+Two optional query parameters choose which runs it reports:
+
+| Parameter | Effect |
+| --- | --- |
+| `branch=BRANCH` | Only runs on that branch. |
+| `event=EVENT` | Only runs triggered by that event, such as `push`. |
+
+Without parameters, the badge shows the default branch. If the default branch
+has no runs, it falls back to the most recent run on any branch. Before
+PostHub's first run on `main`, the endpoint returned:
+
+| URL suffix | Badge |
+| --- | --- |
+| (none) | `CI - passing`, from the `ci-pipeline` branch |
+| `?branch=ci-pipeline` | `CI - passing` |
+| `?branch=main&event=push` | `CI - no status` |
+
+The badge text is in the SVG's `<title>`, so it can be checked from the
+terminal:
+
+```console
+$ curl -sL "https://github.com/AndresLopezEsquivel/PostHub/actions/workflows/ci.yml/badge.svg?branch=main&event=push" \
+    | grep -o '<title>[^<]*</title>'
+<title>CI - no status</title>
+```
+
+### Merging counts as a push
+
+`event=push` does not exclude merged pull requests. Merging writes a merge or
+squash commit to `refs/heads/main`, which is a push to `main`, so the workflow's
+`push: branches: [main]` trigger fires and GitHub records the run with
+`event: push` and `headBranch: main`. The `actions/checkout` repository, which
+changes `main` only through pull requests, shows this:
+
+```console
+$ gh run list --repo actions/checkout --branch main --event push --limit 1 \
+    --json displayTitle,event,headBranch
+[{"displayTitle":"Consolidate dependency updates in CHANGELOG (#2537)","event":"push","headBranch":"main"}]
+```
+
+The `(#2537)` is the squash-merged pull request.
+
+**PostHub's choice:** `?branch=main&event=push`, so the badge answers one
+question: did CI pass on the code that is on `main`? The plain URL would report
+a feature branch while `main` has no runs. `branch=main` alone would also match
+a `pull_request` run from a fork whose head branch is named `main`, since a
+pull request run is recorded under its head branch; `event=push` rules that out.
+
+### The Markdown
+
+```markdown
+[![CI](https://github.com/AndresLopezEsquivel/PostHub/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/AndresLopezEsquivel/PostHub/actions/workflows/ci.yml)
+```
+
+The inner `![CI](...)` embeds the image, with `CI` as its alt text. The outer
+`[...](...)` makes it a link to the workflow's runs page, so a reader can click
+through from the badge to the runs behind it. GitHub can generate the same
+Markdown: Actions tab, the CI workflow, the `...` menu next to "Filter workflow
+runs", then **Create status badge**.
+
+Resources to dive deeper into:
+
+* [Adding a workflow status badge](https://docs.github.com/en/actions/how-tos/monitor-workflows/add-a-status-badge)
+* [Events that trigger workflows: `push`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push)
+* [Webhook events and payloads: `push`](https://docs.github.com/en/webhooks/webhook-events-and-payloads#push)
+* [Basic writing and formatting syntax: images](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#images)
