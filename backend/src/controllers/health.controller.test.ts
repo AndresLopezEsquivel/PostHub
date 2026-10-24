@@ -33,7 +33,7 @@ describe('healthCheck controller', () => {
 
     await healthCheck({} as Request, res);
 
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ status: 'ok', database: 'ok' });
   });
 
