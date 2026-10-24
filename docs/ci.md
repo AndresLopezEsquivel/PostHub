@@ -685,3 +685,428 @@ Resources to dive deeper into:
 * [Workflow syntax: `jobs.<job_id>.steps[*].if`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsif)
 * [Docker Compose `logs` reference](https://docs.docker.com/reference/cli/docker/compose/logs/)
 * [Docker Compose `down` reference](https://docs.docker.com/reference/cli/docker/compose/down/)
+
+## Blocking merges: the "CI must pass" ruleset
+
+A red check on a pull request is only a signal: by default, the Merge button
+still works. To make CI a gate, the target branch needs a rule that requires
+the checks to pass. That rule is a repository setting stored by GitHub, not
+part of `ci.yml`.
+
+### Rulesets or branch protection rules
+
+GitHub has two ways to protect a branch:
+
+* **Branch protection rules**, the older feature. Only one rule applies to a
+  branch, and admins bypass it unless "Do not allow bypassing the above
+  settings" is ticked.
+* **Rulesets**, the newer one. Several rulesets can apply to the same branch,
+  and their rules are combined: where two define the same rule differently, the
+  most restrictive version wins. A ruleset can be switched between active and
+  disabled without deleting it, anyone with read access can see the active
+  ones, and only the actors on its bypass list can skip it.
+
+**PostHub's choice:** a ruleset. Rulesets are available in public repositories
+on GitHub Free, their bypass list is explicit instead of a checkbox, and a
+ruleset can be disabled and re-enabled without losing its settings.
+
+Resources to dive deeper into:
+
+* [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
+* [About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+
+### The ruleset file: `.github/rulesets/main.json`
+
+```json
+{
+  "name": "CI must pass",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] }
+  },
+  "bypass_actors": [],
+  "rules": [
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "Terraform", "integration_id": 15368 },
+          { "context": "Image (backend)", "integration_id": 15368 },
+          { "context": "Image (frontend)", "integration_id": 15368 },
+          { "context": "Test", "integration_id": 15368 }
+        ]
+      }
+    }
+  ]
+}
+```
+
+GitHub never reads this file. It is the request body that created the
+ruleset, kept in the repository as a record. If the ruleset is changed in the
+web UI, the file falls out of date, so changes should go through the file and
+the `PUT` request shown below.
+
+Nothing in it is secret. The app ID is public, the check names appear on every
+pull request, and the ruleset of a public repository, including its ID, can be
+read without logging in. Creating, changing or deleting it requires admin
+access to the repository.
+
+| Field | Meaning | Docs |
+| --- | --- | --- |
+| `name` | The label shown in the repository settings. | [REST body parameters](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#create-a-repository-ruleset--parameters) |
+| `target` | What the ruleset protects: `branch`, `tag` or `push`. | [REST body parameters](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#create-a-repository-ruleset--parameters) |
+| `enforcement` | `active` enforces it; `disabled` keeps it without enforcing it. (`evaluate` needs GitHub Enterprise.) | [Enforcement statuses](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#using-ruleset-enforcement-statuses) |
+| `conditions.ref_name` | Which branches it covers. `~DEFAULT_BRANCH` includes the default branch (`main`); `~ALL` would include every branch. | [Conditions object](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#create-a-repository-ruleset-conditions-object), [Choosing branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#choosing-which-branches-or-tags-to-target) |
+| `bypass_actors` | Users, teams, roles or apps allowed to skip the rules. Empty means nobody. | [Granting bypass permissions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset) |
+| `type: required_status_checks` | The rule: these checks must pass before a merge. | [Require status checks to pass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging) |
+| `context` | A check name exactly as the pull request shows it. For a matrix job, that is the expanded name, such as `Image (backend)`. | [REST body parameters](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#create-a-repository-ruleset--parameters) |
+| `integration_id` | The app the check must come from. Without it, anyone with write access could post a status with that name, for example through the API, and satisfy the rule. | [Require status checks to pass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging) |
+| `strict_required_status_checks_policy` | The branch must be up to date with `main` before merging, so the checks ran against the code that will actually land. | [Require status checks to pass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging) |
+| `do_not_enforce_on_create` | When `true`, a branch covered by the ruleset can be created even though its checks have not passed. | [REST body parameters](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#create-a-repository-ruleset--parameters) |
+
+A required check must have passed in the repository during the last seven
+days. Each of PostHub's checks had passed shortly before the ruleset was
+created.
+
+**PostHub's choice:**
+
+* All four jobs are required, because each one checks something the others do
+  not.
+* Each check is pinned to GitHub Actions, the only app that reports checks in
+  this repository.
+* Strict mode is on. With one branch open at a time it rarely costs an extra
+  run, and it catches two changes that pass on their own but break together.
+* The bypass list is empty, so the owner is blocked like anyone else. A gate
+  the owner can skip does not prove much.
+* No required review. A solo developer cannot approve their own pull request,
+  so that rule would block every merge.
+* The workflow has no path filters. A required workflow that is skipped
+  because of a filter never reports, and the pull request waits forever with
+  "Waiting for status to be reported".
+
+Resources to dive deeper into:
+
+* [Available rules for rulesets: require status checks to pass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging)
+* [REST API: create a repository ruleset](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#create-a-repository-ruleset)
+* [Troubleshooting required status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)
+
+### Finding the `integration_id`
+
+The ID belongs to the GitHub App that reports the checks. Every check run
+records its app, so the checks on a recent commit show it:
+
+```console
+$ gh api repos/AndresLopezEsquivel/PostHub/commits/0dc6ae5/check-runs \
+    --jq '.check_runs[] | {name, app: .app.slug, app_id: .app.id}'
+{"app":"github-actions","app_id":15368,"name":"Test"}
+{"app":"github-actions","app_id":15368,"name":"Image (frontend)"}
+{"app":"github-actions","app_id":15368,"name":"Image (backend)"}
+{"app":"github-actions","app_id":15368,"name":"Terraform"}
+```
+
+The app can also be looked up by its slug, with or without logging in:
+
+```console
+$ gh api apps/github-actions --jq .id
+15368
+```
+
+The output also confirms the check names to put in `context`.
+
+Another app, such as an external CI service, could be the source instead. To
+be selected, it must be installed in the repository with the `statuses:write`
+permission and have recently submitted a check run.
+
+Resources to dive deeper into:
+
+* [REST API: list check runs for a Git reference](https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28#list-check-runs-for-a-git-reference)
+* [REST API: get an app](https://docs.github.com/en/rest/apps/apps?apiVersion=2022-11-28#get-an-app)
+
+### Applying it with `gh api`
+
+`gh api` sends an authenticated request to the GitHub REST API. `--input`
+uses a file as the request body. Creating, updating or deleting a ruleset
+needs admin access; with a fine-grained token, that is the "Administration"
+repository permission (write).
+
+Create the ruleset:
+
+```console
+$ gh api --method POST repos/AndresLopezEsquivel/PostHub/rulesets \
+    --input .github/rulesets/main.json
+```
+
+The response is the new ruleset, including its ID (`25761123` for PostHub) and
+`"current_user_can_bypass": "never"`, which confirms the empty bypass list
+applies to the owner too.
+
+Read it back:
+
+```console
+$ gh api repos/AndresLopezEsquivel/PostHub/rulesets              # all rulesets
+$ gh api repos/AndresLopezEsquivel/PostHub/rulesets/25761123     # one ruleset
+$ gh api repos/AndresLopezEsquivel/PostHub/rules/branches/main \
+    --jq '.[] | {type, ruleset_id, checks: [.parameters.required_status_checks[].context]}'
+{"checks":["Terraform","Image (backend)","Image (frontend)","Test"],"ruleset_id":25761123,"type":"required_status_checks"}
+```
+
+The last request answers the question that matters: which rules apply to
+`main` right now, from every ruleset combined.
+
+Change it after editing the file:
+
+```console
+$ gh api --method PUT repos/AndresLopezEsquivel/PostHub/rulesets/25761123 \
+    --input .github/rulesets/main.json
+```
+
+To turn it off, set `"enforcement": "disabled"` in the file and send the same
+`PUT`. To remove it entirely:
+
+```console
+$ gh api --method DELETE repos/AndresLopezEsquivel/PostHub/rulesets/25761123
+```
+
+The same settings are in the web UI: the repository's **Settings**, then
+**Rulesets** in the sidebar under "Code, planning, and automation".
+
+Resources to dive deeper into:
+
+* [`gh api` manual](https://cli.github.com/manual/gh_api)
+* [REST API: rules](https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28)
+* [Creating rulesets for a repository](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository)
+
+### What a red build looks like
+
+To prove the gate works, one commit broke a unit test on purpose
+(`expect(res.statusCode).toBe(201)` instead of `200` in
+`health.controller.test.ts`), and the next commit reverted it.
+
+Run [40042491288](https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042491288)
+on the broken commit:
+
+| Check | Result | Time |
+| --- | --- | --- |
+| Test | fail | 1m9s |
+| Image (backend) | pass | 20s |
+| Image (frontend) | pass | 17s |
+| Terraform | pass | 17s |
+
+* Only `Test` failed. Jobs run on separate machines, so one failure does not
+  stop the others.
+* Inside `Test`, the backend step failed, the frontend step was skipped, and
+  the log and teardown steps ran because of their `if:` conditions.
+* The pull request's merge state went from `CLEAN` to `BLOCKED`.
+
+Run [40042883115](https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042883115)
+on the revert passed all four checks, and the merge state went back to
+`CLEAN`.
+
+The revert is a new commit (`git revert`), not a rewrite of history, so both
+commits stay on the branch as a record of the demo.
+
+Resources to dive deeper into:
+
+* [Status checks](https://docs.github.com/en/pull-requests/reference/status-checks)
+* [`git revert` documentation](https://git-scm.com/docs/git-revert)
+
+## Watching CI from the terminal: `gh`
+
+Everything on the Actions tab is also available through `gh`, GitHub's CLI.
+The examples below are real output from PostHub's pull request #8: run
+40042491288 is the deliberately broken commit, and run 40042883115 is the
+revert.
+
+### Finding a run: `gh run list`
+
+```console
+$ gh run list --branch ci-pipeline --limit 3
+STATUS  TITLE                                        WORKFLOW  BRANCH       EVENT         ID           ELAPSED  AGE
+✓       ci(workflow): add a GitHub Actions pipeline  CI        ci-pipeline  pull_request  40042883115  1m27s    about 19 hours ago
+X       ci(workflow): add a GitHub Actions pipeline  CI        ci-pipeline  pull_request  40042491288  1m12s    about 19 hours ago
+✓       ci(workflow): add a GitHub Actions pipeline  CI        ci-pipeline  pull_request  39695090041  1m23s    about 2 days ago
+```
+
+Every row has the same title because the workflow sets no `run-name`. For a
+`pull_request` run, GitHub then uses the pull request's title, not the commit
+message. The ID column is what the other `gh run` commands take.
+
+Useful filters: `--branch`, `--status failure`, `--workflow CI`, and
+`--commit`. `--commit` needs the full SHA: with the short SHA `680b0c4` it
+returned nothing, and with `680b0c4d7aee8332361f4bbfb7c71c8fc047a472` it found
+run 40042883115. `git rev-parse HEAD` prints the full SHA of the current
+commit.
+
+Resources to dive deeper into:
+
+* [`gh run list` manual](https://cli.github.com/manual/gh_run_list)
+* [Workflow syntax: `run-name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#run-name)
+
+### Following a run: `gh run watch`
+
+```console
+$ gh run watch 40042491288 --exit-status
+```
+
+It redraws the run's jobs and steps every few seconds until the run finishes.
+`--compact` shows only the relevant or failed steps. `--exit-status` makes the
+command's exit code match the run (non-zero when the run fails), so it can
+gate the next command:
+
+```console
+$ gh run watch 40042883115 --exit-status && echo "CI is green"
+```
+
+`gh run watch` does not work with fine-grained personal access tokens, because
+it needs the `checks:read` permission, which they cannot have. The token from
+`gh auth login` works.
+
+Resources to dive deeper into:
+
+* [`gh run watch` manual](https://cli.github.com/manual/gh_run_watch)
+
+### Checks on a pull request: `gh pr checks`
+
+```console
+$ gh pr checks 8
+All checks were successful
+0 cancelled, 0 failing, 4 successful, 0 skipped, and 0 pending checks
+
+   NAME                                DESCRIPTION  ELAPSED  URL
+✓  CI/Image (backend) (pull_request)                21s      https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042883115/job/120717790095
+✓  CI/Image (frontend) (pull_request)               20s      https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042883115/job/120717790081
+✓  CI/Terraform (pull_request)                      17s      https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042883115/job/120717790039
+✓  CI/Test (pull_request)                           1m24s    https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042883115/job/120717789901
+```
+
+In a terminal, each name reads `<workflow>/<job> (<event>)`. Piped into
+another command, the output becomes tab-separated and shows only the job name,
+which is also the name the ruleset requires.
+
+Useful flags:
+
+* `--required` lists only the checks the ruleset requires.
+* `--watch` waits until every check finishes, and `--fail-fast` stops waiting
+  at the first failure.
+* `--json name,state,bucket` returns machine-readable results. `bucket` groups
+  the state into `pass`, `fail`, `pending`, `skipping` or `cancel`.
+
+While checks are still running, the command exits with code 8, so a script
+can tell "not finished" apart from "failed".
+
+Resources to dive deeper into:
+
+* [`gh pr checks` manual](https://cli.github.com/manual/gh_pr_checks)
+* [`gh` exit codes](https://cli.github.com/manual/gh_help_exit-codes)
+
+### Reading a failed run: `gh run view`
+
+Without flags, it shows the run's jobs and their results. `--verbose` adds the
+steps; for a failed run, the steps of the failed job appear without it:
+
+```console
+$ gh run view 40042491288
+
+X ci-pipeline CI AndresLopezEsquivel/PostHub#8 · 40042491288
+Triggered via pull_request about 19 hours ago
+
+JOBS
+X Test in 1m9s (ID 120716552605)
+  ✓ Set up job
+  ✓ Check out the repository
+  ✓ Start the development stack
+  ✓ Create and migrate the test database
+  X Run the backend tests
+  - Run the frontend tests
+  ✓ Show the container logs
+  ✓ Stop the stack and remove its volumes
+  ✓ Post Check out the repository
+  ✓ Complete job
+✓ Image (frontend) in 17s (ID 120716552819)
+✓ Terraform in 17s (ID 120716552890)
+✓ Image (backend) in 20s (ID 120716552943)
+
+ANNOTATIONS
+X Process completed with exit code 1.
+Test: .github#86
+
+
+To see what failed, try: gh run view 40042491288 --log-failed
+View this run on GitHub: https://github.com/AndresLopezEsquivel/PostHub/actions/runs/40042491288
+```
+
+The step list tells the story of section "Steps that run anyway": the backend
+tests failed (`X`), the frontend tests were skipped (`-`), and the two steps
+with `if:` conditions still ran.
+
+`--log-failed` prints the log of the failed steps only. Each line starts with
+the job, the step and a timestamp (trimmed here):
+
+```console
+$ gh run view 40042491288 --log-failed
+Test  Run the backend tests  ... FAIL  |unit| src/controllers/health.controller.test.ts > healthCheck controller > responds 200 with database: ok when the check passes
+Test  Run the backend tests  ... AssertionError: expected 200 to be 201 // Object.is equality
+Test  Run the backend tests  ...  ❯ src/controllers/health.controller.test.ts:36:28
+Test  Run the backend tests  ...       Tests  1 failed | 212 passed (213)
+Test  Run the backend tests  ... ##[error]Process completed with exit code 1.
+```
+
+Because it only shows failed steps, the output of "Show the container logs"
+is not there: that step succeeded. To read it, view the job's full log with
+the job ID from the summary:
+
+```console
+$ gh run view --job 120716552605 --log
+```
+
+Resources to dive deeper into:
+
+* [`gh run view` manual](https://cli.github.com/manual/gh_run_view)
+
+### Can it merge: `gh pr view --json mergeStateStatus`
+
+```console
+$ gh pr view 8 --json mergeStateStatus
+{"mergeStateStatus":"CLEAN"}
+```
+
+This is the same verdict as the merge box on the pull request page. The values
+that matter for PostHub's ruleset:
+
+| Value | GitHub's description | When PostHub sees it |
+| --- | --- | --- |
+| `CLEAN` | Mergeable and passing commit status. | All four checks passed. |
+| `BLOCKED` | The merge is blocked. | A required check failed, as on run 40042491288. |
+| `BEHIND` | The head ref is out of date. | `main` moved ahead; strict mode needs the branch updated first. |
+| `UNSTABLE` | Mergeable with non-passing commit status. | A check that is not required failed. |
+| `DIRTY` | The merge commit cannot be cleanly created. | A merge conflict. |
+
+Pull request #8 is a draft, but it still reports `CLEAN`: draft status is a
+separate field, `isDraft`.
+
+Resources to dive deeper into:
+
+* [`gh pr view` manual](https://cli.github.com/manual/gh_pr_view)
+* [GraphQL reference: `MergeStateStatus`](https://docs.github.com/en/graphql/reference/pulls#enum-mergestatestatus)
+
+### Running it again: `gh run rerun`
+
+```console
+$ gh run rerun 40042491288 --failed
+```
+
+`--failed` re-runs only the failed jobs, `--job <id>` re-runs one job, and
+`--debug` turns on debug logging. The job ID is the one `gh run view` shows,
+also available with
+`gh run view <run-id> --json jobs --jq '.jobs[] | {name, databaseId}'`.
+
+**PostHub's choice:** a re-run is for failures outside the code, such as a
+registry or network timeout. A failing test is fixed with a new commit: a
+re-run of the same commit would fail the same way.
+
+Resources to dive deeper into:
+
+* [`gh run rerun` manual](https://cli.github.com/manual/gh_run_rerun)
