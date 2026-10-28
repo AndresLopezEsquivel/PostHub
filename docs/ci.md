@@ -16,7 +16,7 @@ explains it piece by piece.
 * **Trigger (`on:`):** the events that start a run. PostHub's workflow runs on
   pushes to `main` and on pull requests.
 * **Job:** a unit of work that runs on its own fresh virtual machine, called a
-  **runner**. `runs-on: ubuntu-latest` asks for a GitHub-hosted Ubuntu machine.
+  **runner**. `runs-on: ubuntu-26.04` asks for a GitHub-hosted Ubuntu machine.
   Jobs run in parallel unless one is told to wait for another.
 * **Step:** one task inside a job. Steps run in order on the same runner, and the
   job fails as soon as one step fails.
@@ -25,11 +25,51 @@ explains it piece by piece.
   * `uses:` runs an **action**, a reusable step published by someone else.
     `actions/checkout` copies the repository onto the runner, which starts empty.
 
+PostHub's workflow, drawn with these terms. The matrix (explained in the images
+job section) turns the images job into two jobs, so a run uses four runners:
+
+```mermaid
+flowchart TB
+    trigger(["push to main, or a pull request"]) --> workflow
+
+    subgraph workflow ["Workflow: CI (.github/workflows/ci.yml)"]
+        direction LR
+
+        subgraph terraform ["Job: Terraform (runner 1)"]
+            direction TB
+            tf1["Check out"] --> tf2["Set up Terraform"] --> tf3["terraform fmt -check"]
+            tf3 --> tf4["terraform init"] --> tf5["terraform validate"]
+        end
+
+        subgraph backend ["Job: Image (backend) (runner 2)"]
+            direction TB
+            be1["Check out"] --> be2["docker build backend"]
+        end
+
+        subgraph frontend ["Job: Image (frontend) (runner 3)"]
+            direction TB
+            fe1["Check out"] --> fe2["docker build frontend"]
+        end
+
+        subgraph test ["Job: Test (runner 4)"]
+            direction TB
+            t1["Check out"] --> t2["docker compose up"] --> t3["test:setup"]
+            t3 --> t4["Backend tests"] --> t5["Frontend tests"]
+            t5 --> t6["Logs, if a step failed"] --> t7["docker compose down, always"]
+        end
+    end
+```
+
+The four jobs start at the same time, each on its own fresh runner, and share
+nothing. Inside each job, the steps run in order, top to bottom.
+
 Resources to dive deeper into:
 
 * [Understanding GitHub Actions](https://docs.github.com/en/actions/get-started/understand-github-actions)
 * [Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 * [GitHub's official actions](https://github.com/actions), such as `checkout`, `setup-node`, and `cache`
+* [Creating Mermaid diagrams](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams#creating-mermaid-diagrams), how GitHub renders them
+* [Mermaid flowchart syntax](https://mermaid.js.org/syntax/flowchart.html)
 
 ### What gets tested on a pull request
 
