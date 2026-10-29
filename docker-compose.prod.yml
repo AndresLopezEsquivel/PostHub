@@ -1,36 +1,27 @@
-# Production stack — self-contained, NOT an override of docker-compose.yml. Run it
-# explicitly (it is not the default file, so it is only used when named):
+# The production stack. It is standalone, not an override of docker-compose.yml,
+# so it must always be named:
 #
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# Differs from dev on nearly everything, which is why it's a standalone file rather
-# than a layer of !reset/!override patches: built images (no bind mounts, no tsx),
-# an nginx edge terminating TLS on :443, a managed RDS database (no local `db`
-# container), and real secrets. Nothing here falls back to a dev default.
-#
-# Secrets come from a git-ignored root .env (see .env.example); Compose auto-loads
-# it from the project directory. The ${VAR:?...} forms below fail the run fast with
-# a clear message when a required value is missing, rather than starting with an
-# empty/insecure one.
+# Values come from the root .env (see .env.example). A ${VAR:?message} value stops
+# the run with that message when the variable is missing.
 services:
   api:
     build:
       context: ./backend
-      target: production          # the compiled dist/ image
+      target: production
     environment:
-      NODE_ENV: production         # flips the secure cookie + `trust proxy: 1` on
-      PORT: 4000                   # nginx reaches it as api:4000 on the compose network
-      # Managed RDS. DATABASE_SSL=true → pool.ts uses ssl { rejectUnauthorized:false }
-      # (acceptable inside the VPC). Required — no @db fallback in prod.
+      NODE_ENV: production         # enables the secure cookie and trust proxy
+      # Must match proxy_pass http://api:4000 in nginx.prod.conf.
+      PORT: 4000
+      # RDS requires TLS. backend/src/db/pool.ts explains the certificate setting.
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to the RDS endpoint in .env}
       DATABASE_SSL: "true"
-      # Signs session cookies. Required in prod — must NOT fall back to the dev
-      # secret. Generate with `openssl rand -hex 32`.
+      # Required here because backend/src/config/env.ts falls back to a dev secret
+      # when SESSION_SECRET is unset.
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env (openssl rand -hex 32)}
-      # S3 uploads + CloudFront reads. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are
-      # deliberately NOT wired — the EC2 instance role supplies write creds and the
-      # container reaches instance metadata directly. Uploads stay dormant (503) and
-      # images null until these are set; setting them needs no code change.
+      # Optional: while these are unset, uploads return 503 and posts show no images.
+      # There are no AWS keys here on purpose: the EC2 instance role supplies them.
       S3_BUCKET: ${S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
@@ -41,17 +32,18 @@ services:
   web:
     build:
       context: ./frontend
-      target: production          # the built static bundle served by nginx
+      target: production
     ports:
-      - "443:443"                  # the only public entry point; SG opens 22 + 443
+      # The only published port. infra/network.tf also opens 22 for SSH.
+      - "443:443"
     volumes:
-      # Deploy-only TLS config mounted over the image's baked-in nginx.conf, so the
-      # committed frontend/nginx.conf stays the plain :80 upstream-TLS variant.
+      # Replaces the image's nginx.conf (plain :80, for TLS ending upstream) with the
+      # version that terminates TLS on :443.
       - ./frontend/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
-      # Self-signed cert + key generated on the instance (git-ignored, see certs/).
+      # The self-signed certificate and key, generated on the instance (see README.md).
       - ./certs:/etc/nginx/certs:ro
-    # Required, not cosmetic: nginx resolves `proxy_pass http://api:4000` once at
-    # startup and exits if the name does not resolve.
+    # nginx resolves api:4000 once at startup and exits if the name does not
+    # resolve, so the api container must exist first.
     depends_on:
       - api
     restart: unless-stopped
