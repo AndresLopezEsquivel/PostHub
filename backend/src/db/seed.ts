@@ -1,13 +1,12 @@
 import { pool, closePool } from './pool';
 
-// Seeds the categories lookup table — reference data the app needs to function
-// (the Explore filter and the post form's multi-select both read it).
+// Seeds the categories, which the app needs: the Explore filter and the post
+// form both read them. Unlike seed-dev.ts, it touches no user content.
 //
-// Idempotent and production-safe: ON CONFLICT (slug) DO NOTHING means re-running
-// never duplicates or overwrites. Adding a category later is just another row
-// here plus a re-run. This does NOT touch user content — that's seed-dev.ts.
+// Safe to re-run, including in production: ON CONFLICT (slug) DO NOTHING skips
+// existing rows. A new entry here is added on the next run, but changing the
+// name of an existing slug does not update the database.
 
-// name is the human label; slug is the URL form (/explore?category=<slug>).
 const CATEGORIES: ReadonlyArray<{ name: string; slug: string }> = [
   { name: 'Philosophy', slug: 'philosophy' },
   { name: 'Fiction', slug: 'fiction' },

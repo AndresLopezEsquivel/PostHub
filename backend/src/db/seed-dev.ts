@@ -2,10 +2,8 @@ import bcrypt from 'bcryptjs';
 import { pool, closePool } from './pool';
 import { withTransaction } from './query';
 
-// DEVELOPMENT sample data. Wipes the domain tables and inserts a small, known
-// graph of users/posts/comments/likes/bookmarks/follows so the schema can be
-// exercised — cascades, composite-PK dedup, the self-follow CHECK — before any
-// controller exists. Categories are preserved (they're reference data).
+// Development sample data: wipes every table except categories and inserts a
+// small, known set of users, posts, comments, likes, bookmarks and follows.
 //
 // DESTRUCTIVE. Refuses to run when NODE_ENV=production so it can never truncate
 // a real database.
@@ -20,9 +18,9 @@ async function seedDev(): Promise<void> {
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
 
   await withTransaction(async (tx) => {
-    // RESTART IDENTITY resets the serial sequences so ids are predictable (the
-    // first user is always 1). CASCADE clears the FK-dependent rows. categories
-    // is intentionally absent — reference data survives.
+    // RESTART IDENTITY resets the serial sequences, so ids are predictable (the
+    // first user is always 1). categories is left out on purpose: it is
+    // reference data, and post_categories is the only table that points to it.
     await tx.query(`
       TRUNCATE users, posts, comments, post_likes, bookmarks, follows,
                notifications, post_categories
@@ -53,7 +51,6 @@ async function seedDev(): Promise<void> {
       categoryId.set(slug, id);
     }
 
-    // --- users (ids 1..3) ---
     const users: ReadonlyArray<{ username: string; email: string; bio: string }> = [
       { username: 'andres', email: 'andres@example.com', bio: 'Writes about absurdism.' },
       { username: 'mira', email: 'mira@example.com', bio: 'Fiction and long walks.' },
@@ -69,7 +66,6 @@ async function seedDev(): Promise<void> {
       userId.set(u.username, rows[0].id);
     }
 
-    // --- posts (ids 1..5) ---
     const posts: ReadonlyArray<{
       author: string;
       title: string;
@@ -124,7 +120,6 @@ async function seedDev(): Promise<void> {
       }
     }
 
-    // --- comments ---
     const comments: ReadonlyArray<[string, string, string]> = [
       // [commenter, post title, content]
       ['mira', 'On absurdism', 'Great read — the opening lands hard.'],
@@ -138,7 +133,6 @@ async function seedDev(): Promise<void> {
       );
     }
 
-    // --- likes (composite PK enforces one per user per post) ---
     const likes: ReadonlyArray<[string, string]> = [
       ['mira', 'On absurdism'],
       ['devon', 'On absurdism'],
@@ -152,7 +146,6 @@ async function seedDev(): Promise<void> {
       );
     }
 
-    // --- bookmarks (private) ---
     const bookmarks: ReadonlyArray<[string, string]> = [
       ['andres', 'A short story about rain'],
       ['mira', 'The myth, revisited'],
@@ -164,7 +157,7 @@ async function seedDev(): Promise<void> {
       );
     }
 
-    // --- follows (directional; andres↔mira is the mutual pair) ---
+    // [follower, followee]. andres and mira follow each other.
     const follows: ReadonlyArray<[string, string]> = [
       ['andres', 'mira'],
       ['mira', 'andres'],

@@ -1,15 +1,13 @@
 import { types } from 'pg';
 
-// pg type-parser fixes. Imported once, for side effects, before any query runs
-// (pool.ts imports this at the top).
+// Imported for its side effect by pool.ts, before any query runs.
 //
-// node-pg returns PostgreSQL `bigint` (OID 20, aka int8) as a STRING to avoid
-// silent precision loss past Number.MAX_SAFE_INTEGER. But COUNT(*) is typed
-// bigint, and this schema leans on COUNT aggregates everywhere — likeCount,
-// commentCount, follower counts, the pagination `total`. Left unparsed they
-// arrive as "12", which then string-concatenates instead of adding.
+// pg returns PostgreSQL bigint (int8) as a string, because a JS number loses
+// precision past Number.MAX_SAFE_INTEGER. COUNT(*) returns bigint, so without
+// this parser every count (likes, comments, followers, pagination totals) would
+// arrive as a string like "12", and adding to it would concatenate.
 //
-// Our counts are page-sized, nowhere near 2^53, so parsing them to a JS number
-// is safe. If a genuinely large bigint column ever appears, cast it to text in
-// the query (`col::text`) rather than reverting this globally.
+// No count here comes near 2^53, so parsing to a number is safe. If a bigint
+// column that large is ever added, select it as `col::text` instead of removing
+// this parser.
 types.setTypeParser(types.builtins.INT8, (value) => parseInt(value, 10));

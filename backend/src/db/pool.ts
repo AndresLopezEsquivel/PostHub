@@ -1,26 +1,25 @@
 import { Pool } from 'pg';
-import './types'; // registers pg type parsers — must run before any query
+import './types'; // registers pg type parsers, so it must run before any query
 import { env } from '../config/env';
 
-// A single shared pool for the process. pg opens connections lazily, so
-// constructing this issues no query and contacts no server.
+// pg opens connections lazily, so importing this module contacts no server.
 export const pool = new Pool({
   connectionString: env.databaseUrl,
 
-  // Postgres' own default max_connections is 100, shared across every client.
-  // 10 per process leaves room for several API replicas plus psql sessions.
+  // max_connections is shared by every client: 100 by default, and on RDS it
+  // depends on the instance's memory. 10 per process leaves room for several
+  // API replicas plus psql sessions.
   max: 10,
 
-  // Return idle connections to Postgres rather than holding them open forever.
   idleTimeoutMillis: 30_000,
 
   // Fail fast when the database is unreachable instead of hanging the request.
   connectionTimeoutMillis: 5_000,
 
-  // RDS requires TLS; local Compose Postgres does not speak it at all.
-  // `rejectUnauthorized: false` trusts RDS' certificate without shipping the
-  // AWS CA bundle — acceptable inside a VPC, and the point to revisit if the
-  // database is ever reachable from outside one.
+  // RDS requires TLS, and the local Compose database does not support it.
+  // `rejectUnauthorized: false` accepts RDS's certificate without the AWS CA
+  // bundle. That is acceptable while the database is reachable only inside the
+  // VPC (infra/rds.tf); revisit it if that ever changes.
   ssl: env.databaseSsl ? { rejectUnauthorized: false } : undefined,
 });
 
