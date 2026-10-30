@@ -1,17 +1,10 @@
--- notifications — the loosest table, by necessity.
--- See docs/database_design.md "NOTIFICATIONS".
+-- post_id and comment_id are nullable because each type uses a different set:
+-- a like has a post, a comment has both, and a follow has neither. One table
+-- per type would be stricter, but the notifications list would need a query
+-- per table.
 --
--- Self-referential through users twice: recipient_id (who sees it) and
--- actor_id (who caused it).
---
--- Why post_id and comment_id are nullable: a follow notification has neither,
--- a like has a post but no comment. The target columns are conditionally
--- relevant, so the table cannot be fully constrained. This is a known
--- polymorphic-style trade-off — the alternative (one table per type) is
--- stricter but multiplies queries for a single unified list.
---
--- Both target FKs cascade: a notification about a deleted post has nothing
--- left to link to.
+-- Both cascade: a notification about a deleted post or comment has nothing left
+-- to link to.
 
 CREATE TABLE notifications (
   id           serial      PRIMARY KEY,

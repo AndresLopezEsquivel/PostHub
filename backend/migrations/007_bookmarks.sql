@@ -1,9 +1,5 @@
--- bookmarks — structurally identical to post_likes.
--- See docs/database_design.md "BOOKMARKS".
---
--- Same composite PK logic, same toggle semantics. The difference is purely
--- semantic: likes are a public signal, bookmarks are private. The Bookmarks
--- screen filters by user_id = me.
+-- The same shape as post_likes, but private: a post's like count is public,
+-- while bookmarks are only ever read for their owner.
 
 CREATE TABLE bookmarks (
   user_id    integer     NOT NULL REFERENCES users(id) ON DELETE CASCADE,

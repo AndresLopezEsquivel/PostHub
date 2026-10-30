@@ -1,17 +1,11 @@
--- follows — the self-referential table.
--- See docs/database_design.md "FOLLOWS".
+-- Following is one-way, so a mutual follow is two rows.
 --
--- Both FKs target users. Following is directional and asymmetric: A→B does not
--- imply B→A, and a mutual follow is two rows.
---   follower count  = COUNT(*) WHERE followee_id = X
---   following count = COUNT(*) WHERE follower_id = X
+-- follower_id is the user who follows, and followee_id is the user being
+-- followed. The names are one letter apart, and swapping them in a query
+-- silently inverts the feed.
 --
--- NAMING CAUTION: follower_id (doing the following) and followee_id (being
--- followed) are one letter apart. A swap silently inverts the entire feed.
--- The -er/-ee pair is fixed across schema, services, and API responses.
---
--- The CHECK blocks self-follow at the database level, so no application code
--- path — controller, service, or seed script — can create such a row.
+-- The CHECK blocks self-follows in the database, so no code path, seed scripts
+-- included, can create one.
 
 CREATE TABLE follows (
   follower_id integer     NOT NULL REFERENCES users(id) ON DELETE CASCADE,

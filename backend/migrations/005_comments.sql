@@ -1,13 +1,9 @@
--- comments — a second true relation between users and posts, carrying content.
--- See docs/database_design.md "COMMENTS".
+-- Not a join table, despite the two foreign keys: a user can comment on the
+-- same post more than once, so (post_id, author_id) is not unique and each
+-- comment needs its own `id`.
 --
--- Structurally this looks like a join table (two FKs) but it is NOT one. It
--- carries its own content and allows repeats — the same user can comment twice
--- on one post — so (post_id, author_id) is not unique and a surrogate key is
--- required.
---
--- No parent_comment_id: threading is out of scope. Adding it later is a
--- self-referential FK.
+-- No parent_comment_id: threading is out of scope. It can be added later as a
+-- foreign key to comments(id).
 
 CREATE TABLE comments (
   id         serial      PRIMARY KEY,
