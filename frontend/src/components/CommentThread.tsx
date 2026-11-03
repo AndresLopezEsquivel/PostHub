@@ -155,7 +155,7 @@ export function CommentThread({ postId }: { postId: number }) {
       )}
 
       {items.length > 0 && (
-        <ul className={styles.list}>
+        <ul role="list" className={styles.list}>
           {items.map((comment) => (
             <li key={comment.id} className={styles.comment}>
               <p className={styles.meta}>

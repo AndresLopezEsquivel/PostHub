@@ -69,7 +69,7 @@ export function PostDetail() {
         </p>
 
         {post.categories.length > 0 && (
-          <ul className={styles.tags}>
+          <ul role="list" className={styles.tags}>
             {post.categories.map((category) => (
               <li key={category.slug}>
                 <Link to={`/?category=${category.slug}`} className={styles.tag}>
