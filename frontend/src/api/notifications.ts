@@ -1,21 +1,14 @@
 import { request } from './client';
 import type { Author } from './posts';
 
-// The notifications resource (docs/api_design.md "Notifications"). All auth-only.
-// Rows are produced as side effects of likes/comments/follows; this module only
-// reads them and marks them read.
-
-// --- API shapes (mirrors backend/src/services/notifications.service.ts) -------
-
 export type NotificationType = 'like' | 'comment' | 'follow';
 
-// The post a like/comment points at; null for a follow (which has no post).
+// The post a like or comment points at; null for a follow.
 export interface NotificationPost {
   id: number;
   title: string;
 }
 
-// The actor is the same <user> as a post card's author.
 export interface NotificationItem {
   id: number;
   type: NotificationType;
@@ -25,9 +18,9 @@ export interface NotificationItem {
   createdAt: string;
 }
 
-// The list envelope carries unreadCount alongside pagination, so the nav badge
-// needs no separate count request. unreadCount is the FULL unread tally, unaffected
-// by the ?unread filter.
+// unreadCount comes with the list, so the nav badge needs no separate
+// request. It counts all unread notifications, even when the list is
+// filtered with ?unread.
 export interface NotificationList {
   data: NotificationItem[];
   page: number;

@@ -3,11 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSession } from './auth';
 import { ApiError } from './client';
 
-// The highest-value test in the scaffold. GET /api/auth/session answers 401 when
-// logged out, so "not authenticated" and "the server is broken" arrive through
-// the same channel. Conflating them would silently log every user out during an
-// outage — and, worse, look like normal behaviour while doing it.
-
 function mockFetch(response: Response) {
   vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(response));
 }

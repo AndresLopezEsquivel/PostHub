@@ -1,19 +1,10 @@
 import { type Paginated, request } from './client';
 import type { Author } from './posts';
 
-// The comments resource (docs/api_design.md "Comments"). Two path shapes, mirroring
-// the backend's two routers: the LIST and CREATE are post-scoped
-// (/posts/:postId/comments), while DELETE is comment-scoped (/comments/:id) because
-// a comment id is globally unique and the post is redundant there.
-//
-// updateComment (PATCH /comments/:id) is intentionally absent: screens.md §5 lists
-// only "delete comment", so editing waits until a screen needs it — same "add per
-// need" discipline as the backend controllers.
+// Listing and creating are scoped to a post (/posts/:postId/comments).
+// Deleting uses /comments/:id, since a comment id is unique on its own.
 
-// --- API shapes (mirrors backend/src/services/comments.service.ts) -----------
-
-// The <comment> author is the same <user> as a post card's, so Author is reused
-// from api/posts.ts rather than re-declared. Comments carry no per-viewer state.
+// Comments carry no per-viewer state, unlike post cards.
 export interface Comment {
   id: number;
   content: string;
@@ -43,5 +34,5 @@ export function createComment(
 }
 
 export function deleteComment(commentId: number): Promise<void> {
-  return request<void>(`/comments/${commentId}`, { method: 'DELETE' }); // 204
+  return request<void>(`/comments/${commentId}`, { method: 'DELETE' });
 }
