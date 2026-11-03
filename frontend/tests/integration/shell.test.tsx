@@ -7,14 +7,14 @@ import { routes } from '../../src/routes';
 import { sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// One smoke test over the real composed shell: the real route table from
-// src/routes.tsx, the real AuthProvider probing GET /api/auth/session through the
-// real fetch wrapper, answered by MSW. It proves the wiring holds end to end,
-// which is why the route table itself needs no separate test.
+// One smoke test over the real shell: the route table from src/routes.tsx and
+// the real AuthProvider checking GET /api/auth/session through the real
+// client, answered by MSW. It covers the wiring, so the route table needs no
+// separate test.
 //
-// createMemoryRouter over the exported `routes` rather than the exported
-// `router`: the browser router owns real history and would leak one test's
-// navigation into the next, and a memory router can start at any path.
+// createMemoryRouter over routes, not the exported router: the browser router
+// uses real history, which would carry one test's navigation into the next,
+// and a memory router can start at any path.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
 
@@ -27,7 +27,7 @@ function renderAppAt(path: string) {
 
 describe('application shell', () => {
   it('shows the anonymous nav and Explore at the root', async () => {
-    // The default handler answers 401 — the documented logged-out path.
+    // The default handler returns 401: logged out.
     renderAppAt('/');
 
     expect(await screen.findByRole('link', { name: 'Log in' })).toBeInTheDocument();
@@ -51,8 +51,8 @@ describe('application shell', () => {
 
     renderAppAt('/bookmarks');
 
-    // The guarded screen renders rather than redirecting — the whole point of
-    // RequireAuth holding through the 'loading' state.
+    // The guarded screen renders instead of redirecting, because RequireAuth
+    // waits through 'loading'.
     expect(await screen.findByRole('heading', { name: 'Bookmarks' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Feed' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'andres' })).toBeInTheDocument();

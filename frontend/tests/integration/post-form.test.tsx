@@ -9,8 +9,8 @@ import { routes } from '../../src/routes';
 import { sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// Create / edit / delete end to end: the real router + PostForm + DeletePostButton +
-// client.ts against MSW. Alpha (post 1) is authored by 'andres' in the fixtures.
+// Create, edit and delete end to end against MSW. Alpha (post 1) is by
+// 'andres' in the fixtures.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
@@ -67,7 +67,7 @@ describe('Create / edit / delete post', () => {
 
     expect(screen.getByText('Title is required')).toBeInTheDocument();
     expect(screen.getByText('Content is required')).toBeInTheDocument();
-    // Still on the create screen — nothing navigated.
+    // Still on the create screen: nothing navigated.
     expect(screen.getByRole('heading', { name: 'Create post' })).toBeInTheDocument();
   });
 

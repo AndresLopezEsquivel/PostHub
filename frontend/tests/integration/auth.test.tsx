@@ -8,11 +8,10 @@ import { routes } from '../../src/routes';
 import { loginInvalid, registerConflict } from '../msw/handlers';
 import { server } from '../setup';
 
-// The pass-1 parity test: the real route table, the real AuthProvider, and the
-// real api/client.ts error mapping, driven end to end against MSW. Nothing here
-// is mocked below the network — a passing test means the whole chain (form ->
-// client -> ApiError -> field/form error, and success -> session flip -> nav +
-// redirect) actually holds.
+// Uses the real route table, AuthProvider and api/client.ts against MSW, with
+// nothing mocked above the network. A passing test means the whole chain
+// holds: form, client, ApiError, field or form error, and on success the
+// session, nav and redirect.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(

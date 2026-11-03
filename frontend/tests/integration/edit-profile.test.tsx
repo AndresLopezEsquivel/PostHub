@@ -70,7 +70,7 @@ describe('Edit profile', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-    // Still on the edit screen — nothing was submitted.
+    // Still on the edit screen: nothing was submitted.
     expect(screen.getByRole('heading', { name: 'Edit profile' })).toBeInTheDocument();
   });
 });

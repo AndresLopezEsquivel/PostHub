@@ -55,9 +55,9 @@ pre {
   overflow-x: auto;
 }
 
-/* :focus-visible rather than :focus, so the ring appears for keyboard navigation
-   without following every mouse click. Never remove it without a replacement —
-   it is the only affordance a keyboard user has for "where am I". */
+/* :focus-visible rather than :focus, so the ring shows for keyboard navigation
+   but not on every mouse click. Don't remove it without a replacement: it's
+   how keyboard users see where they are. */
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;

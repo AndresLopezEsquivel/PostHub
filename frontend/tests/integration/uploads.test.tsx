@@ -9,10 +9,9 @@ import { routes } from '../../src/routes';
 import { sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// The uploads flow end to end: the real router + PostForm/EditProfile +
-// ImageUploadField + api/uploads + client.ts against MSW. The default handlers sign a
-// fake S3 URL and 200 the direct PUT, so selecting a file runs the real presign→PUT
-// path and the form submits the returned key.
+// Uploads end to end against MSW. The default handlers sign a fake S3 URL and
+// accept the PUT, so picking a file runs the real presign and PUT, and the
+// form submits the returned key.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
@@ -96,7 +95,7 @@ describe('Uploads', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await screen.findByRole('heading', { name: 'Alpha' });
-    expect(sent).not.toHaveProperty('imageKey'); // untouched → preserved
+    expect(sent).not.toHaveProperty('imageKey'); // untouched, so the stored image is kept
   });
 
   it('sends imageKey null when the image is removed', async () => {

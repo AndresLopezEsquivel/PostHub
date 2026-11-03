@@ -8,8 +8,9 @@ import { routes } from '../../src/routes';
 import { bookmarksEmpty, feedEmpty, sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// Feed and Bookmarks — both are just a PostCardList over a different source, so the
-// pass's real behaviour is the CTA empty state and the remove-on-unbookmark path.
+// Both pages are a PostCardList over a different source, so these tests cover
+// what differs: Feed's call-to-action empty state and Bookmarks removing an
+// unbookmarked card.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
