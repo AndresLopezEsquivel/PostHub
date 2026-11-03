@@ -3,9 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useAsync } from './useAsync';
 
-// The stale-result guard is the whole reason this hook exists rather than a bare
-// useEffect, so it is the thing worth testing: a superseded request must never win.
-
 describe('useAsync', () => {
   it('goes loading -> success and exposes the data', async () => {
     const { result } = renderHook(() => useAsync(() => Promise.resolve('value'), []));
@@ -35,10 +32,10 @@ describe('useAsync', () => {
       initialProps: { dep: 1 },
     });
 
-    // Change deps → the hook starts the second fetch and must abandon the first.
+    // Changing the deps starts a second fetch.
     rerender({ dep: 2 });
 
-    // Resolve the SECOND first, then the stale FIRST. The late first must not win.
+    // Resolve the second, then the first. The late first must not win.
     resolveSecond('second');
     await waitFor(() => expect(result.current.data).toBe('second'));
 

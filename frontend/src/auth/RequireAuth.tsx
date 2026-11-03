@@ -2,23 +2,16 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 
 import { useAuth } from './useAuth';
 
-// The gate on every "Authenticated users only" screen in docs/screens.md (Feed,
-// Create post, Edit post, Edit profile, Notifications, Bookmarks).
+// A layout route rather than a wrapper per element, so the redirect rule is
+// written once for every guarded route.
 //
-// Used as a LAYOUT ROUTE, not a per-element wrapper: one instance renders an
-// <Outlet /> for its whole subtree, so the redirect rule is written once and
-// cannot drift between routes. The same reasoning as backend/src/routes/index.ts
-// mounting requireAuth on a router rather than repeating it per handler.
-//
-// This is UX, never security. The browser can lie about anything here; the real
-// gate is the backend's 401/403 on every request.
+// This only shapes the UI. The backend's 401 and 403 are the real check.
 export function RequireAuth() {
   const { status } = useAuth();
   const location = useLocation();
 
-  // Hold — do NOT redirect. The session probe is still in flight and we do not
-  // yet know the answer. Redirecting here would bounce every authenticated user
-  // off their own deep link on a hard refresh.
+  // Don't redirect while the session check is running: a logged-in user
+  // reloading a deep link would be sent away.
   if (status === 'loading') {
     return <p role="status">Loading…</p>;
   }

@@ -1,32 +1,24 @@
 import { type DependencyList, useCallback, useEffect, useState } from 'react';
 
-// The list machinery every data screen reuses (Explore first, then Post detail,
-// Feed, Bookmarks, Profile posts). It is the hard, error-prone part — run an async
-// fetch, track its status, and never let a superseded request write state — factored
-// out once. It is deliberately NOT a data-fetching library: no cache, no dedup, no
-// retries. Screens still own their own markup, including their own empty-state copy
-// (Feed's empty is a call to action; Bookmarks' is not), so only the fetch/status
-// lifecycle lives here.
+// Runs an async fetch and tracks its status, so screens don't repeat that
+// logic. It has no cache, deduplication or retries.
 //
-// The same stale-result discipline as AuthProvider's session probe: an ignore flag
-// tied to the effect run, so a slow response that resolves after the deps changed
-// (or after unmount) is dropped rather than flashing stale data or warning on an
-// unmounted setState.
+// A result that arrives after the deps changed, or after unmount, is ignored,
+// so older data never replaces newer data.
 
 export type AsyncStatus = 'loading' | 'success' | 'error';
 
 export interface AsyncState<T> {
   status: AsyncStatus;
-  // Present once status is 'success'. Kept from the previous run while a new fetch
-  // is in flight would be nice for lists, but this pass keeps it simple: data is
-  // null until the first success and reset to null on every dep change.
+  // The last successful result: it stays while a new fetch runs, and is null
+  // until the first success.
   data: T | null;
   error: unknown;
   reload: () => void;
 }
 
-// `fetcher` receives an AbortSignal so callers that go through api/client.ts can
-// forward it and let a superseded request actually cancel, not just be ignored.
+// fetcher gets an AbortSignal so a superseded request is cancelled, not just
+// ignored.
 export function useAsync<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   deps: DependencyList,

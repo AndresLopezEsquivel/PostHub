@@ -6,9 +6,9 @@ import { AuthProvider } from './auth/AuthProvider';
 import { UnreadProvider } from './notifications/UnreadProvider';
 import { router } from './routes';
 
-// Order matters: reset neutralises browser defaults, tokens defines the
-// vocabulary, base applies it to bare elements. Component styles are CSS Modules
-// imported by their own components, so this is the whole global stylesheet story.
+// Order matters: reset clears browser defaults, tokens defines the variables,
+// and base applies them to plain elements. Component styles are CSS Modules
+// imported by each component.
 import './styles/reset.css';
 import './styles/tokens.css';
 import './styles/base.css';
