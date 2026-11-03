@@ -2,10 +2,8 @@ import { Request, Response } from 'express';
 import * as postsService from '../services/posts.service';
 import { requireUserId } from './http';
 
-// Thin HTTP layer over posts.service.listFeed. The feed is auth-only — requireAuth
-// guards the route and requireUserId asserts the session — so a no-session request
-// is 401, distinct from an authenticated user who follows no one (200, empty page).
-// No try/catch: Express 5 forwards a rejected promise to errorHandler.
+// A request with no session gets a 401. A logged-in user who follows no one
+// gets a 200 with an empty page, so the client can tell the two apart.
 
 export async function getFeed(req: Request, res: Response): Promise<void> {
   const userId = requireUserId(req);

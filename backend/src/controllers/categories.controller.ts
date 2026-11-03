@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import * as categoriesService from '../services/categories.service';
 
-// GET /api/categories — the full category list, a plain JSON array (not the
-// pagination envelope; the set is small and seeded). No auth, no ownership.
+// Returns a plain JSON array, not the pagination envelope: the category list
+// is small and seeded.
 //
 // An async handler with no try/catch on purpose: under Express 5 a rejected
 // promise is forwarded to errorHandler automatically, so an unexpected DB error

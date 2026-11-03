@@ -1,9 +1,8 @@
 import { Request } from 'express';
 import { notFound, unauthorized } from '../errors/httpError';
 
-// Small request-reading helpers shared across the post-scoped controllers
-// (posts, likes, bookmarks). They keep the HTTP layer thin and the 401/404
-// semantics identical everywhere.
+// Request-reading helpers shared by the controllers, so the 401 and 404
+// behavior is the same everywhere.
 
 // Parse a numeric :postId. A non-numeric segment can't identify a post, so it
 // gets the same 404 as a well-formed id that doesn't exist.
@@ -49,7 +48,7 @@ export function requireUserId(req: Request): number {
 }
 
 // The viewer for public reads: the session user if logged in, else null. The
-// card serializer uses it to derive likedByMe/bookmarkedByMe.
+// post queries use it to compute likedByMe and bookmarkedByMe.
 export function viewerId(req: Request): number | null {
   return req.session.userId ?? null;
 }

@@ -1,13 +1,13 @@
-// A typed error carrying the HTTP status (and optional field) a handler wants to
-// return. Handlers `throw` these for expected failures — a taken username, bad
-// credentials, a non-owner write — and errorHandler renders them into the shared
-// `{ error: { message, field? } }` envelope. Express 5 auto-forwards a rejected
-// async handler to errorHandler, so throwing one of these from a controller or
-// service is all that's needed; no try/catch, no manual res.status.
+// A typed error carrying the HTTP status (and optional field) to return.
+// Handlers throw these for expected failures, such as a taken username, bad
+// credentials or a write by a non-owner, and errorHandler renders them into
+// the shared `{ error: { message, field? } }` envelope. Express 5 forwards a
+// rejected async handler to errorHandler, so throwing is enough: no try/catch
+// and no manual res.status.
 //
-// Anything that is NOT an HttpError reaching errorHandler is an unexpected bug
-// and becomes a generic 500 — the status here is a deliberate, safe-to-expose
-// choice, never leaked from a raw exception.
+// Any other error that reaches errorHandler is treated as a bug and becomes a
+// generic 500, so the status a client sees is always a deliberate choice,
+// never taken from a raw exception.
 export class HttpError extends Error {
   readonly status: number;
   readonly field?: string;

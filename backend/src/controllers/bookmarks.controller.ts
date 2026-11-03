@@ -3,9 +3,8 @@ import * as bookmarksService from '../services/bookmarks.service';
 import * as postsService from '../services/posts.service';
 import { parsePostId, requireUserId } from './http';
 
-// Thin HTTP layer over bookmarks.service. The two toggles are post-scoped; the
-// listing (GET /api/bookmarks) is user-scoped and reuses the posts card renderer
-// via postsService.listBookmarks. All three are auth-gated on their routers.
+// The bookmark list comes from postsService.listBookmarks so it returns the
+// same post cards as the other listings.
 
 export async function bookmarkPost(req: Request, res: Response): Promise<void> {
   const state = await bookmarksService.bookmarkPost(requireUserId(req), parsePostId(req));
