@@ -3,11 +3,9 @@ import request from 'supertest';
 import app from '../../src/app';
 import { seedUser, seedPost } from '../helpers/db';
 
-// Feed — the followee-scoped listing at /api/feed. Auth-only, driven through the
-// real app + posthub_test with request.agent for the session. listFeed is a thin
-// SQL wrapper (like listBookmarks), so this integration suite is the real proof:
-// the 401 guard, the empty-state envelope, follow-scoping + order, pagination, and
-// that the viewer's like/bookmark state binds to the same session user.
+// listFeed is a thin SQL wrapper, so this integration suite is where it's really
+// tested: the 401, the empty page, which authors are included and their order,
+// pagination, and that like and bookmark state belongs to the session user.
 
 async function registerAgent(creds: {
   username: string;
@@ -31,7 +29,7 @@ describe('GET /api/feed', () => {
 
   it('returns an empty envelope for a user who follows no one', async () => {
     const agent = await registerAgent(viewer);
-    // Someone else posts, but the viewer follows nobody — the feed is empty.
+    // Someone else posts, but the viewer follows nobody, so the feed is empty.
     const stranger = await seedUser({ username: 'stranger', email: 'stranger@example.com' });
     await seedPost({ authorId: stranger });
 
@@ -57,13 +55,14 @@ describe('GET /api/feed', () => {
     // The viewer follows A and B (via the API, so no need for the viewer's id).
     await agent.put('/api/users/authora/follow');
     await agent.put('/api/users/authorb/follow');
-    // The viewer authors a post too — it must NOT appear (you can't follow yourself).
+    // The viewer authors a post too; it must not appear, because you can't
+    // follow yourself.
     await agent.post('/api/posts').send({ title: 'my own', content: 'body text here' });
 
     const res = await agent.get('/api/feed');
 
     expect(res.status).toBe(200);
-    // A's two posts + B's one; C excluded, own excluded.
+    // A's two posts and B's one; C's and the viewer's own are excluded.
     expect(res.body.total).toBe(3);
     expect(res.body.data.map((card: { id: number }) => card.id)).toEqual([aNew, bMid, aOld]);
     const authors = res.body.data.map((card: { author: { username: string } }) => card.author.username);

@@ -4,15 +4,14 @@ import app from '../../src/app';
 import { query } from '../../src/db/query';
 import { seedUser } from '../helpers/db';
 
-// Smoke test for the integration harness itself: it proves the three things
-// every later pass relies on — supertest can drive the real app and see the
+// Smoke test for the integration harness itself. It checks what every other
+// integration test relies on: supertest can drive the real app and see the
 // shared error envelope, the suite runs against the isolated posthub_test
 // database with a clean slate per test, and the int8 parser is in effect.
 describe('integration harness', () => {
   it('unmatched routes return the shared 404 envelope', async () => {
-    // A path no resource router will ever own, so this stays 404 as handlers
-    // land pass by pass — it exercises the catch-all notFoundHandler, not any
-    // particular endpoint's absence.
+    // A path no router will ever own, so this tests the catch-all
+    // notFoundHandler, not a missing endpoint.
     const res = await request(app).get('/api/no-such-route');
 
     expect(res.status).toBe(404);

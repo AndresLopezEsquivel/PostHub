@@ -164,8 +164,7 @@ function validatePassword(value: unknown): string {
 
 // Updates only the fields present in the body. A username in the body is a
 // 400, not silently ignored: usernames can't change, and ignoring it would
-// hide a client bug. Changing the email or password doesn't ask for the
-// current password.
+// hide a client bug.
 export async function updateOwnProfile(
   userId: number,
   input: unknown,

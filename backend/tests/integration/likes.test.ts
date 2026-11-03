@@ -3,9 +3,8 @@ import request from 'supertest';
 import app from '../../src/app';
 import { seedUser, seedPost } from '../helpers/db';
 
-// /api/posts/:postId/like — the idempotent like toggle, driven through the real
-// app + posthub_test. Writes are authed (request.agent carries the cookie);
-// public reads confirm the count and per-viewer likedByMe threaded into the card.
+// Writes are authed (request.agent carries the cookie); public reads confirm
+// the count and the per-viewer likedByMe on the card.
 
 async function registerAgent(creds: {
   username: string;
@@ -68,7 +67,8 @@ describe('PUT/DELETE /api/posts/:postId/like', () => {
     const anon = await request(app).get(`/api/posts/${postId}`);
     expect(anon.body).toMatchObject({ likeCount: 2, likedByMe: false });
 
-    // A's read of the same post sees likedByMe true — proves viewer threading.
+    // A's read of the same post sees likedByMe true, so the viewer is passed
+    // through.
     const aDetail = await agentA.get(`/api/posts/${postId}`);
     expect(aDetail.body).toMatchObject({ likeCount: 2, likedByMe: true });
 

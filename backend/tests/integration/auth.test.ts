@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../../src/app';
 
-// POST/GET /api/auth/* — driven through the real session cookie. request.agent
-// persists Set-Cookie across calls, so a register/session/logout sequence on one
-// agent proves the whole round-trip; plain request(app) calls carry no cookie.
+// Driven through the real session cookie. request.agent keeps Set-Cookie across
+// calls, so a register, session and logout sequence on one agent tests the
+// whole round trip; plain request(app) calls carry no cookie.
 const creds = { username: 'neo', email: 'neo@example.com', password: 'trinity123' };
 
 describe('POST /api/auth/register', () => {
