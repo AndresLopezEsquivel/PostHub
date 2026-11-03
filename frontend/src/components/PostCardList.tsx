@@ -6,14 +6,10 @@ import { useAsync } from '../hooks/useAsync';
 import { PostCard } from './PostCard';
 import styles from './PostCardList.module.css';
 
-// A paginated PostCard list — the loading/empty/error triad + cards + Prev/Next,
-// with page in local state. Extracted from Explore's shape so Profile's posts (and
-// Feed/Bookmarks in pass 7) reuse it. Explore keeps its own copy because its filter
-// state is URL-bound, which is that screen's distinguishing feature; the plain lists
-// don't need shareable pagination.
+// A paginated list of PostCards, with the page in local state. Explore doesn't
+// use it: its filters and page live in the URL so they can be shared.
 //
-// `load` is the only source of data; the caller memoises it (useCallback keyed on
-// its own inputs, e.g. the username) so it is a stable dep here.
+// The caller wraps load in useCallback so it is a stable dependency here.
 export function PostCardList({
   load,
   empty,
@@ -21,9 +17,8 @@ export function PostCardList({
 }: {
   load: (page: number, signal: AbortSignal) => Promise<Paginated<PostCardData>>;
   empty: ReactNode;
-  // When set (the Bookmarks screen), a card that gets unbookmarked is dropped from
-  // the list immediately. The one bit of cross-component coordination we allow — a
-  // callback within this one list, not a shared store (see usePostToggles).
+  // Bookmarks sets this so an unbookmarked card leaves the list at once. It's a
+  // callback within this list, not a shared store.
   removeOnUnbookmark?: boolean;
 }) {
   const [page, setPage] = useState(1);

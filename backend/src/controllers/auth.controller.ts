@@ -2,10 +2,9 @@ import { Request, Response } from 'express';
 import * as authService from '../services/auth.service';
 import { unauthorized } from '../errors/httpError';
 
-// Thin HTTP layer over auth.service. Owns the one thing the service can't touch:
-// the request-bound session. express-session's regenerate/destroy are callback
-// APIs, so we promisify them to keep these handlers linear and let Express 5
-// forward any rejection to errorHandler.
+// express-session's regenerate and destroy take callbacks. Wrapping them in
+// promises keeps these handlers linear and lets Express 5 send any rejection
+// to errorHandler.
 
 function regenerateSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -19,9 +18,9 @@ function destroySession(req: Request): Promise<void> {
   });
 }
 
-// Issue a fresh session bound to this user. Regenerating first rotates the
-// session id on privilege change, closing the session-fixation window (an
-// attacker who planted a pre-auth cookie can't ride it into an authed session).
+// Issue a fresh session bound to this user. Regenerating first gives the user
+// a new session id at login, so an attacker who planted a cookie before login
+// can't use it afterwards (session fixation).
 async function openSession(req: Request, userId: number): Promise<void> {
   await regenerateSession(req);
   req.session.userId = userId;

@@ -3,10 +3,8 @@ import request from 'supertest';
 import app from '../../src/app';
 import { seedUser, seedPost, seedComment } from '../helpers/db';
 
-// Comments — the post-scoped list/create and the top-level update/delete, driven
-// through the real app + posthub_test. Reads are public; authed writes use
-// request.agent to carry the session cookie. Also proves the commentCount retrofit
-// into the post card.
+// Reads are public; authed writes use request.agent to carry the session
+// cookie. Also checks that commentCount appears on the post card.
 
 async function registerAgent(creds: {
   username: string;

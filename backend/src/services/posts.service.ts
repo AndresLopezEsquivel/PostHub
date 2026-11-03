@@ -4,12 +4,8 @@ import { isForeignKeyViolation } from '../db/pgErrors';
 import { badRequest, forbidden, notFound } from '../errors/httpError';
 import { env } from '../config/env';
 
-// Posts data access + validation + row→API mapping. Like the other services it
-// holds no req/res/session: the session user is passed in as a plain `userId`.
-// This is where the <postCard> shape is assembled — the join and the (for now
-// stubbed) counts live here, not in the snake_case row layer.
-
-// --- API shapes (camelCase, client-facing) -------------------------------
+// Builds the post card that every post list returns. Other services reuse
+// Author, avatarKeyToUrl, normalizePagination and assertPostExists from here.
 
 export interface Author {
   username: string;
@@ -21,7 +17,6 @@ export interface CategoryTag {
   slug: string;
 }
 
-// The list card, exactly as documented in docs/api_design.md "<postCard>".
 export interface PostCard {
   id: number;
   title: string;
@@ -35,13 +30,10 @@ export interface PostCard {
   createdAt: string;
 }
 
-// Post detail = the card plus the full body and the two fields the edit/detail
-// screens need (image prefill, edited timestamp). See docs/api_design.md getPost.
 export interface PostDetail extends PostCard {
   content: string;
-  // The raw stored key (edit form resends it unchanged) AND its resolved public URL
-  // for rendering. imageUrl is null until S3_PUBLIC_BASE_URL is set, even when a key
-  // is present — the two are independent (key persists without a CDN configured).
+  // imageUrl is null while S3_PUBLIC_BASE_URL is unset, even when imageKey is
+  // set.
   imageKey: string | null;
   imageUrl: string | null;
   updatedAt: string | null;
@@ -54,18 +46,15 @@ export interface PostList {
   total: number;
 }
 
-// --- The shared card query ----------------------------------------------
-
-// One SELECT feeds list, detail, and the create/update responses, so the card
-// shape has a single source of truth. Categories are aggregated as a JSON array
-// in-SQL (node-postgres parses json to a JS array); the author is joined in.
+// One SELECT serves every post list, the detail view and the create and update
+// responses, so they all return a post in the same shape. json_agg builds the
+// categories array in SQL, and node-postgres parses json into a JS array.
 //
-// `viewerParam` is the SQL placeholder (`$1`, `$3`, …) that binds the *viewing*
-// user's id, used to derive likedByMe/bookmarkedByMe. It's a placeholder token
-// the caller owns — never user input — so interpolating it is injection-safe
-// (the value still binds through pg). A null viewer makes `user_id = NULL` never
-// match, so both flags come back `false` for anonymous readers automatically.
-// `int8` COUNT → JS number and `bool` → JS boolean via the pg parsers in db/types.
+// viewerParam is the placeholder ($1, $3, ...) for the viewer's id, used for
+// likedByMe and bookmarkedByMe. Callers pass a fixed placeholder, never user
+// input, so interpolating it is safe. An anonymous viewer binds null, and
+// user_id = NULL never matches, so both flags come back false. The COUNTs
+// arrive as numbers because of the int8 parser in db/types.ts.
 function cardSelect(viewerParam: string): string {
   return `
   SELECT p.id, p.title, p.content, p.image_key, p.created_at, p.updated_at,
@@ -87,8 +76,8 @@ function cardSelect(viewerParam: string): string {
 `;
 }
 
-// The row shape the card SELECT returns — not a table row, so it lives here
-// rather than in types/db.ts (which mirrors tables one-for-one).
+// What cardSelect returns. It isn't a table row, so it lives here rather than
+// in types/db.ts.
 interface PostCardRow {
   id: number;
   title: string;
@@ -105,8 +94,6 @@ interface PostCardRow {
   bookmarked_by_me: boolean;
 }
 
-// --- Pure mappers (unit-tested) -----------------------------------------
-
 const EXCERPT_MAX = 200;
 
 // Collapse whitespace and truncate to a word boundary with an ellipsis. The list
@@ -120,19 +107,17 @@ export function buildExcerpt(content: string, max = EXCERPT_MAX): string {
   return `${head}…`;
 }
 
-// The single chokepoint that turns a stored S3 object key into a browser-loadable
-// URL, for both avatars and post images. The base is the CloudFront distribution
-// (env.s3PublicBaseUrl); the bucket is private behind OAC, so there is no raw-S3
-// public URL. Null when unconfigured or keyless, so a missing CDN degrades to "no
-// image" rather than a broken link. The trailing-slash strip keeps the join clean
-// whether or not the base URL ends in one.
+// Turns a stored S3 key into a URL for avatars and post images. The base is
+// the CloudFront distribution: the bucket is private and only CloudFront can
+// read it (OAC), so there is no direct S3 URL. Null when the key or the base
+// URL is missing, so the page shows no image instead of a broken one.
 export function keyToPublicUrl(key: string | null): string | null {
   if (!key || !env.s3PublicBaseUrl) return null;
   return `${env.s3PublicBaseUrl.replace(/\/$/, '')}/${key}`;
 }
 
-// Avatars resolve through the same base; kept as a named export because the users,
-// comments, and notifications services already import it by this name.
+// Same as keyToPublicUrl. Kept because the users, comments and notifications
+// services import it under this name.
 export function avatarKeyToUrl(key: string | null): string | null {
   return keyToPublicUrl(key);
 }
@@ -165,8 +150,6 @@ export function toPostDetail(row: PostCardRow): PostDetail {
   };
 }
 
-// --- Pagination ----------------------------------------------------------
-
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -193,8 +176,6 @@ export function normalizePagination(
   };
 }
 
-// --- Validation ----------------------------------------------------------
-
 const TITLE_MAX = 200; // posts.title varchar(200)
 const IMAGE_KEY_MAX = 255; // posts.image_key varchar(255)
 
@@ -213,8 +194,8 @@ function validateContent(value: unknown): string {
   return content;
 }
 
-// Accepts an array of positive integer category ids; de-duplicates. Existence of
-// the ids is enforced by the FK (a bad id → 23503 → 400, mapped at the call site).
+// The FK checks that each id exists. A bad id fails with 23503, which the
+// callers turn into a 400.
 function validateCategoryIds(value: unknown): number[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
@@ -241,8 +222,6 @@ function validateImageKey(value: unknown): string | null {
   return key;
 }
 
-// --- Queries -------------------------------------------------------------
-
 async function fetchPostRow(
   postId: number,
   viewerId: number | null,
@@ -250,8 +229,6 @@ async function fetchPostRow(
   return queryOne<PostCardRow>(`${cardSelect('$1')} WHERE p.id = $2`, [viewerId, postId]);
 }
 
-// Likes and bookmarks hang off a post; a toggle on a missing post is a 404, the
-// same as the read/write handlers. Exported for the like/bookmark services to reuse.
 export async function assertPostExists(postId: number): Promise<void> {
   const row = await queryOne<{ id: number }>('SELECT id FROM posts WHERE id = $1', [postId]);
   if (!row) throw notFound('Post not found');
@@ -263,7 +240,7 @@ async function insertPostCategories(
   categoryIds: number[],
 ): Promise<void> {
   if (categoryIds.length === 0) return;
-  // Multi-row insert: ($1,$2),($1,$3),… — $1 is the post id, the rest the ids.
+  // Multi-row insert: ($1, $2), ($1, $3), ... where $1 is the post id.
   const rows = categoryIds.map((_, i) => `($1, $${i + 2})`).join(', ');
   await tx.query(
     `INSERT INTO post_categories (post_id, category_id) VALUES ${rows}`,
@@ -271,8 +248,7 @@ async function insertPostCategories(
   );
 }
 
-// Fetch author_id for the ownership check. 404 if the post is gone, 403 if it
-// belongs to someone else — the distinction the whole app keeps honest.
+// 404 if the post is gone, 403 if it belongs to someone else.
 async function assertOwner(postId: number, userId: number): Promise<void> {
   const row = await queryOne<{ author_id: number }>(
     'SELECT author_id FROM posts WHERE id = $1',
@@ -317,8 +293,7 @@ export async function listPosts(
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  // `likes` orders by the real like count (empty until step 4, so it behaves like
-  // `newest` today); id is a stable tiebreak for equal timestamps/counts.
+  // id breaks ties between equal counts or timestamps, so pages don't overlap.
   const orderBy =
     sort === 'likes'
       ? 'ORDER BY (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) DESC, p.created_at DESC, p.id DESC'
@@ -330,9 +305,8 @@ export async function listPosts(
   );
   const total = totalRow?.total ?? 0;
 
-  // The `where`/`orderBy` placeholders index into `values` ($1..$n); the viewer
-  // and pagination bind *after* them so the same `where` also serves the
-  // viewer-free total query above.
+  // where uses $1..$n from values. The viewer and pagination placeholders come
+  // after them, so the total query above can reuse where without the viewer.
   const offset = (page - 1) * limit;
   const viewerParam = `$${values.length + 1}`;
   const rows = await queryMany<PostCardRow>(
@@ -370,9 +344,8 @@ export async function listBookmarks(
   return { data: rows.map(toPostCard), page, limit, total };
 }
 
-// The posts a given user authored, newest-first — the profile's "posts" tab.
-// Reuses the card machinery like listBookmarks, but the author and the viewer are
-// distinct people, so they bind to separate params ($1 author, $2 viewer).
+// The profile's posts tab, newest first. The author and the viewer are
+// different people, so they bind separately ($1 author, $2 viewer).
 export async function listPostsByAuthor(
   authorId: number,
   params: { page?: unknown; limit?: unknown },
@@ -398,12 +371,9 @@ export async function listPostsByAuthor(
   return { data: rows.map(toPostCard), page, limit, total };
 }
 
-// The personalized feed: posts by the authors this user follows, newest-first.
-// Reuses the card machinery a third time (after listBookmarks/listPostsByAuthor);
-// here the follower is also the viewer, so a single $1 binds both the followee
-// subquery and the card's likedByMe/bookmarkedByMe. Own posts never appear — you
-// can't follow yourself (the follows_no_self_follow CHECK), so your id is never in
-// the followee set.
+// Posts by the authors this user follows, newest first. The user is also the
+// viewer, so $1 binds both. Their own posts never appear: the
+// follows_no_self_follow CHECK keeps their id out of the followee set.
 export async function listFeed(
   userId: number,
   params: { page?: unknown; limit?: unknown },
@@ -471,8 +441,8 @@ export async function createPost(
     throw err;
   });
 
-  // Just committed, so it exists — re-read through the shared card query. The
-  // author is the viewer here, so likedByMe/bookmarkedByMe reflect their state.
+  // The post was just committed, so the assertion is safe. The author is the
+  // viewer, so likedByMe and bookmarkedByMe show their own state.
   const row = await fetchPostRow(postId, authorId);
   return toPostCard(row!);
 }
@@ -517,7 +487,7 @@ export async function updatePost(
         values,
       );
     } else if (hasCategoryIds) {
-      // Only the category set changed — still record it as an edit.
+      // Only the categories changed. That still counts as an edit.
       await tx.query('UPDATE posts SET updated_at = now() WHERE id = $1', [postId]);
     }
     if (hasCategoryIds) {

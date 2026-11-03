@@ -1,16 +1,11 @@
-// Row types — one interface per table, mirroring the columns in
-// docs/database_design.md exactly.
+// Row types, one interface per table, mirroring the columns the migrations
+// create (the diagram is in docs/database.md).
 //
-// These are snake_case ON PURPOSE. They describe what a `SELECT *` hands back,
-// nothing more. The camelCase, computed API shapes (<postCard> with likeCount,
-// likedByMe, excerpt) are NOT here: those fields come from joins and COUNT
-// aggregates that no single row produces, so building them belongs to the
-// service that writes that query — not to this layer, which returns what the
-// database returns.
-//
-// `| null` marks the nullable columns from the schema. `serial`/`integer` map
-// to number, `varchar`/`text` to string, `timestamptz` to string (pg returns
-// it as an ISO string by default).
+// These are snake_case on purpose: they describe what a `SELECT *` returns.
+// The camelCase API shapes (such as a post card with likeCount, likedByMe and
+// excerpt) are not here, because those fields come from joins and COUNT
+// aggregates that no single row produces. The service that writes the query
+// builds them.
 
 export interface UserRow {
   id: number;

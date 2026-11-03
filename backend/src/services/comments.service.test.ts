@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: no database. The db/query helpers are mocked; assertPostExists and
-// assertCommentOwner (via posts.service / this module) go through the mocked
-// queryOne. Exercises mapping, content validation, and ownership without a DB.
+// Unit test with no database. The db/query helpers are mocked, so
+// assertCommentOwner and createComment's post lookup go through the mocked
+// queryOne.
 vi.mock('../db/query', () => ({
   query: vi.fn(),
   queryOne: vi.fn(),
@@ -23,7 +23,7 @@ const mockQuery = query as unknown as Mock;
 const mockQueryOne = queryOne as unknown as Mock;
 const mockWithTransaction = withTransaction as unknown as Mock;
 
-// The row the COMMENT_SELECT returns (author joined), not a raw table row.
+// What COMMENT_SELECT returns, with the author joined in, not a raw table row.
 const sampleCommentRow = {
   id: 17,
   content: 'Great read.',
@@ -42,7 +42,7 @@ describe('toComment', () => {
     expect(toComment(sampleCommentRow)).toEqual({
       id: 17,
       content: 'Great read.',
-      author: { username: 'neo', avatarUrl: null }, // avatarUrl null until step 9
+      author: { username: 'neo', avatarUrl: null }, // no avatar_key, so no URL
       createdAt: '2026-07-14T11:02:09Z',
       updatedAt: null,
     });

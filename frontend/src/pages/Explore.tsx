@@ -8,13 +8,9 @@ import { PostCard } from '../components/PostCard';
 import { useAsync } from '../hooks/useAsync';
 import styles from './Explore.module.css';
 
-// docs/screens.md §3 — Explore. Every post on the site; public, engagement gated.
-//
-// The URL is the single source of filter state (useSearchParams), so every view is
-// shareable and Back/Forward moves between filters. The fetch runs through useAsync,
-// keyed on the four params, which gives the loading/empty/error triad every later
-// list screen reuses. Search arrives from the nav bar as ?search=; category and sort
-// are this screen's own controls.
+// Filters live in the URL, so every view can be shared and Back and Forward
+// move between filters. Search comes from the nav bar as ?search=; category
+// and sort are controls on this page.
 
 function readSort(value: string | null): SortOrder {
   return value === 'likes' ? 'likes' : 'newest';
@@ -33,9 +29,8 @@ export function Explore() {
   const sort = readSort(params.get('sort'));
   const page = readPage(params.get('page'));
 
-  // Change a filter → write the URL and reset to page 1 (a narrower result set
-  // makes the old page number meaningless). The pager is the one caller that keeps
-  // the page, so it sets it after this runs.
+  // Changing a filter resets to page 1, since the old page number means nothing
+  // for the new results. The pager uses goToPage instead.
   const updateFilter = useCallback(
     (mutate: (next: URLSearchParams) => void) => {
       const next = new URLSearchParams(params);

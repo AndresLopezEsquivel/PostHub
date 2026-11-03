@@ -2,10 +2,6 @@ import { Request, Response } from 'express';
 import * as postsService from '../services/posts.service';
 import { parsePostId, requireUserId, viewerId } from './http';
 
-// Thin HTTP layer over posts.service. Reads query/params/body and the session
-// user; the service owns validation, ownership, and the card shape. No try/catch:
-// under Express 5 a rejected promise is forwarded to errorHandler automatically.
-
 export async function listPosts(req: Request, res: Response): Promise<void> {
   const { search, category, sort, page, limit } = req.query;
   const result = await postsService.listPosts(

@@ -4,11 +4,10 @@ import { useLocation, useNavigate } from 'react-router';
 import { type FollowState, followUser, unfollowUser } from '../api/users';
 import { useAuth } from '../auth/useAuth';
 
-// The optimistic follow toggle — the same shape as usePostToggles (pass 4), for the
-// follow button on Profile and on every followers/following row. Local optimistic
-// state, reconciled with the returned FollowState, rolled back on error; an
-// anonymous click redirects to login. onChange lets a caller (Profile) react to the
-// authoritative FollowState — e.g. update the header follower count.
+// Optimistic follow toggle, like usePostToggles: it updates at once, takes the
+// server's FollowState, and rolls back on error. An anonymous click goes to
+// login. onChange gets the server's FollowState; Profile uses it to update the
+// follower count.
 export function useFollowToggle(
   username: string,
   initialFollowing: boolean,

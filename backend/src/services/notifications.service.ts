@@ -4,26 +4,18 @@ import { badRequest, forbidden, notFound } from '../errors/httpError';
 import { NotificationType } from '../types/db';
 import { Author, avatarKeyToUrl, normalizePagination } from './posts.service';
 
-// Notifications data access + validation + row→API mapping. Like the other
-// services it holds no req/res/session: the session user arrives as a plain
-// `userId`. Two jobs live here: the recipient-scoped read/mark endpoints, and the
-// shared `insertNotification` that the like/comment/follow producers call inside
-// their own transactions to record a side-effect notification.
-//
-// The <notification> actor is the same <user> as a post card's author, so the
-// author mapping and avatar-URL construction are reused from posts.service.
+// Two jobs: the read and mark-read endpoints for the recipient, and
+// insertNotification, which likes, comments and follows call inside their own
+// transactions. The actor has the same shape as a post card's author, so the
+// mapping and avatar URL come from posts.service.
 
-// --- API shapes (camelCase, client-facing) -------------------------------
-
-// The post a notification points at — { id, title } for like/comment, null for
-// follow (the echo of the nullable post_id column).
+// null for a follow, which has no post_id.
 export interface NotificationPost {
   id: number;
   title: string;
 }
 
-// docs/api_design.md "Notifications" — <notification>. comment_id is stored on the
-// row but deliberately not echoed; the list shows only the post.
+// comment_id is stored but not returned: the list only shows the post.
 export interface NotificationItem {
   id: number;
   type: NotificationType;
@@ -43,11 +35,8 @@ export interface NotificationList {
   unreadCount: number;
 }
 
-// --- The shared notification query --------------------------------------
-
-// One SELECT feeds the list (single source of the shape). The actor is joined in;
-// posts is LEFT JOINed because post_id is nullable — a follow notification has no
-// post, so post_id/post_title come back null and map to `post: null`.
+// One SELECT serves the list. posts is LEFT JOINed because a follow has no
+// post_id, so post_id and post_title come back null.
 const NOTIFICATION_SELECT = `
   SELECT n.id, n.type, n.is_read, n.created_at,
          au.username AS actor_username, au.avatar_key AS actor_avatar_key,
@@ -57,8 +46,8 @@ const NOTIFICATION_SELECT = `
   LEFT JOIN posts p ON p.id = n.post_id
 `;
 
-// The row shape the SELECT returns (actor + optional post joined) — distinct from
-// types/db.ts NotificationRow, which mirrors the raw table.
+// What NOTIFICATION_SELECT returns, with the actor and post joined in.
+// NotificationRow in types/db.ts is the raw table row.
 interface NotificationJoinRow {
   id: number;
   type: NotificationType;
@@ -78,14 +67,12 @@ export function toNotification(row: NotificationJoinRow): NotificationItem {
       username: row.actor_username,
       avatarUrl: avatarKeyToUrl(row.actor_avatar_key),
     },
-    // post_id null (a follow) → post null; otherwise both columns are present.
+    // posts.title is NOT NULL, so post_title is set whenever post_id is.
     post: row.post_id === null ? null : { id: row.post_id, title: row.post_title! },
     isRead: row.is_read,
     createdAt: row.created_at,
   };
 }
-
-// --- Reads ---------------------------------------------------------------
 
 async function countUnread(userId: number): Promise<number> {
   const row = await queryOne<{ count: number }>(
@@ -134,10 +121,8 @@ export async function listNotifications(
   };
 }
 
-// --- Mark read -----------------------------------------------------------
-
-// Ownership guard, keyed on recipient_id (not author_id — notifications are the one
-// place ownership means "addressed to me"). 404 if gone, 403 if someone else's.
+// Ownership here is recipient_id, not author_id. 404 if the notification is
+// gone, 403 if it is addressed to someone else.
 async function assertRecipient(notificationId: number, userId: number): Promise<void> {
   const row = await queryOne<{ recipient_id: number }>(
     'SELECT recipient_id FROM notifications WHERE id = $1',
@@ -175,8 +160,6 @@ export async function markAllRead(userId: number): Promise<{ unreadCount: number
   return { unreadCount: 0 };
 }
 
-// --- Producer helper -----------------------------------------------------
-
 export interface NotificationInput {
   recipientId: number;
   actorId: number;
@@ -185,10 +168,9 @@ export interface NotificationInput {
   commentId?: number | null;
 }
 
-// Record a notification as part of the producing action's transaction. Takes the
-// transaction client so the like/comment/follow insert and this insert commit
-// together (or roll back together). The caller decides whether to call it at all
-// (self-notifications and repeat toggles are suppressed upstream).
+// Takes the caller's transaction client, so the like, comment or follow and
+// its notification commit or roll back together. Callers skip
+// self-notifications and repeats.
 export async function insertNotification(
   tx: PoolClient,
   input: NotificationInput,

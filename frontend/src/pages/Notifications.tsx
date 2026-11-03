@@ -14,10 +14,8 @@ import { formatDate } from '../lib/date';
 import { useUnread } from '../notifications/useUnread';
 import styles from './Notifications.module.css';
 
-// docs/screens.md §11 — Notifications. Self only (route under RequireAuth). The
-// side effects produced by likes/comments/follows, newest-first. Opening a
-// notification marks it read and navigates to its source; unreadCount is shared
-// with the nav badge via UnreadContext.
+// Opening a notification marks it read and goes to its source. unreadCount
+// is shared with the nav badge through UnreadContext.
 
 function actionText(type: NotificationType): string {
   if (type === 'like') return 'liked your post';
@@ -25,7 +23,8 @@ function actionText(type: NotificationType): string {
   return 'started following you';
 }
 
-// like/comment carry a post → open the post; a follow has no post → open the actor.
+// A like or comment opens the post; a follow has no post, so it opens the
+// actor's profile.
 function targetOf(n: NotificationItem): string {
   return n.post ? `/posts/${n.post.id}` : `/users/${n.actor.username}`;
 }

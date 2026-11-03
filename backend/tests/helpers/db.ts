@@ -2,8 +2,7 @@ import { query, queryOne } from '../../src/db/query';
 
 // Test-database helpers for the integration suite. resetDb() gives each test a
 // clean slate; the seed* helpers insert just the rows a test needs and return
-// their ids. They mirror the shapes in src/db/seed-dev.ts, kept deliberately
-// small — richer fixtures get added by the pass that first needs them.
+// their ids.
 
 // Every domain table, in an order that doesn't matter because CASCADE clears
 // FK-dependent rows. categories is intentionally absent: it's reference data,
@@ -138,9 +137,9 @@ export async function seedComment(
   return row!.id;
 }
 
-// Arrange a notification directly, for tests that read/mark without driving it
-// through a producer. type is 'like' | 'comment' | 'follow'; post_id/comment_id
-// are nullable (a follow has neither, a like has only a post).
+// Arrange a notification directly, for tests that read or mark notifications
+// without triggering one through the API. A follow has no post or comment, and
+// a like has only a post.
 export async function seedNotification(input: {
   recipientId: number;
   actorId: number;

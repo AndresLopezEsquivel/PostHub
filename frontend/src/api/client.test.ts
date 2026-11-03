@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, request } from './client';
 
-// The fetch wrapper is the one module every future pass depends on, so its edges
-// are worth pinning down here rather than rediscovering them in a screen.
-
 function mockFetch(response: Response) {
   const spy = vi.fn<typeof fetch>().mockResolvedValue(response);
   vi.stubGlobal('fetch', spy);
@@ -34,8 +31,6 @@ describe('request', () => {
 
     const [url, init] = fetchSpy.mock.calls[0]!;
     expect(url).toBe('/api/auth/session');
-    // The session cookie is the only credential this app has; every authenticated
-    // request depends on the browser attaching it.
     expect(init?.credentials).toBe('same-origin');
   });
 
@@ -101,9 +96,8 @@ describe('request', () => {
   });
 
   it('still throws an ApiError when the failure body is not our JSON envelope', async () => {
-    // nginx answers a 502 with an HTML error page, and a proxy timeout has no
-    // body at all. Either must surface as an ApiError the caller can branch on —
-    // not as a SyntaxError from JSON.parse.
+    // nginx answers a 502 with an HTML page, and a proxy timeout has no body.
+    // Both must surface as an ApiError, not a SyntaxError from JSON.parse.
     mockFetch(new Response('<html>502 Bad Gateway</html>', { status: 502 }));
 
     const error = (await request('/posts').catch((e: unknown) => e)) as ApiError;

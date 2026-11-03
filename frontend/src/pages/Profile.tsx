@@ -11,8 +11,8 @@ import { useAsync } from '../hooks/useAsync';
 import { formatDate } from '../lib/date';
 import styles from './Profile.module.css';
 
-// docs/screens.md §8 — Profile. Public. One screen, two modes: self vs other. The
-// mode changes which action shows (Edit profile vs Follow), not which data loads.
+// Your own profile shows Edit profile; anyone else's shows Follow. The data
+// is the same either way.
 export function Profile() {
   const { username = '' } = useParams();
   const { user } = useAuth();
@@ -25,7 +25,8 @@ export function Profile() {
     [username],
   );
 
-  // The follower count updates optimistically when you follow/unfollow from here.
+  // After a follow or unfollow here, the follower count comes from the server's
+  // FollowState.
   const [followerOverride, setFollowerOverride] = useState<number | null>(null);
   useEffect(() => setFollowerOverride(null), [username]);
 

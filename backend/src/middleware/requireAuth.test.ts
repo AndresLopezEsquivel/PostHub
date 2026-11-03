@@ -3,8 +3,8 @@ import type { Request, Response } from 'express';
 import { requireAuth } from './requireAuth';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: the gate in isolation. req.session is faked (the real one is set by
-// the session middleware); we only care that userId presence decides next().
+// Unit test with no session middleware. req.session is faked; the test only
+// checks that a userId decides whether next() gets an error.
 const res = {} as Response;
 
 describe('requireAuth', () => {

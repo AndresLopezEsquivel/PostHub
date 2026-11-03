@@ -4,11 +4,10 @@ import { isApiError } from '../api/client';
 import { deletePost } from '../api/posts';
 import styles from './DeletePostButton.module.css';
 
-// The destructive-action confirmation this pass establishes: an inline two-step
-// delete, reused by both PostDetail and EditPost. First click swaps the button for
-// a "Delete this post? [Delete] [Cancel]" prompt in place — no modal, no
-// window.confirm. onDeleted fires only after the DELETE succeeds; the caller decides
-// where to go (both current callers navigate to Explore).
+// A two-step delete in place, used by PostDetail and EditPost: the first
+// click shows a confirm prompt instead of a modal or window.confirm.
+// onDeleted runs only after the DELETE succeeds, and the caller decides where
+// to go.
 export function DeletePostButton({
   postId,
   onDeleted,

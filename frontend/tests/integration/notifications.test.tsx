@@ -9,8 +9,8 @@ import { routes } from '../../src/routes';
 import { notificationsEmpty, sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// Rendered WITH UnreadProvider (as main.tsx does) so the nav badge is live. The
-// default notifications handler has two unread of three.
+// Rendered with UnreadProvider, as in main.tsx, so the nav badge updates. The
+// default handler has two unread notifications out of three.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
@@ -32,7 +32,7 @@ describe('Notifications', () => {
     renderAppAt('/notifications');
 
     const carol = await screen.findByText('carol');
-    expect(carol.closest('a')).toHaveAttribute('href', '/posts/1'); // like → post
+    expect(carol.closest('a')).toHaveAttribute('href', '/posts/1'); // like
     expect(screen.getByText(/liked your post/)).toBeInTheDocument();
 
     expect(screen.getByText('dave').closest('a')).toHaveAttribute('href', '/posts/2'); // comment
@@ -55,7 +55,7 @@ describe('Notifications', () => {
     // so relying on the badge alone can click before the list renders.
     await screen.findByText('carol');
     await screen.findByLabelText('2 unread');
-    await user.click(screen.getByText('carol')); // the like → /posts/1
+    await user.click(screen.getByText('carol')); // the like, which links to /posts/1
 
     // Navigated to the post, and the badge dropped to 1.
     expect(await screen.findByRole('heading', { name: 'Alpha' })).toBeInTheDocument();

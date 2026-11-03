@@ -8,8 +8,8 @@ import { routes } from '../../src/routes';
 import { likeError, sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// Like/bookmark end to end on Explore: real card + EngagementBar + usePostToggles +
-// client.ts against MSW. The first rendered card is Alpha (newest), likeCount 1.
+// Like and bookmark end to end on Explore against MSW. The first card is
+// Alpha (the newest), with likeCount 1.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
@@ -74,7 +74,7 @@ describe('engagement', () => {
   });
 
   it('sends an anonymous visitor to login on click', async () => {
-    // Default session handler is 401 → anonymous.
+    // The default session handler returns 401, so the visitor is anonymous.
     const user = userEvent.setup();
     renderAppAt('/');
 

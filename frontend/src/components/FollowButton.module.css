@@ -1,5 +1,3 @@
-/* The follow/unfollow button. Tokens only (see styles/tokens.css). */
-
 .button {
   padding: var(--space-1) var(--space-4);
   font: inherit;
@@ -12,7 +10,8 @@
   cursor: pointer;
 }
 
-/* Following → a quieter "outline" look, so the primary state is "not yet following". */
+/* When following, a quieter outline style, so the filled style means "not
+   following yet". */
 .button[aria-pressed='true'] {
   color: var(--color-text-muted);
   background: var(--color-bg);

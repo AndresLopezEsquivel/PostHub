@@ -1,8 +1,5 @@
--- users — the identity table. Everything else points back to it.
--- See docs/database_design.md "USERS".
---
--- No `role` column: authorization is ownership-based. Adding roles later is a
--- purely additive ALTER TABLE, so nothing here needs to anticipate it.
+-- No `role` column: authorization is ownership-based, so users can change only
+-- what they created. Roles can be added later with an ALTER TABLE.
 --
 -- `updated_at` is nullable with no default. A fresh row has never been edited,
 -- and DEFAULT now() would make every one of them look edited.

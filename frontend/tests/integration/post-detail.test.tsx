@@ -8,9 +8,8 @@ import { routes } from '../../src/routes';
 import { sessionHandler } from '../msw/handlers';
 import { server } from '../setup';
 
-// Post detail end to end: the real router + api/client.ts + useAsync + CommentThread
-// against MSW. The default session handler answers 401 (anonymous); tests that need
-// a logged-in viewer install sessionHandler({ username: 'andres', … }).
+// Post detail end to end against MSW. The default session is anonymous;
+// tests that need a logged-in viewer use sessionHandler({ username: 'andres', ... }).
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
@@ -37,7 +36,7 @@ describe('Post detail', () => {
     renderAppAt('/posts/999999');
 
     expect(await screen.findByRole('heading', { name: 'Post not found' })).toBeInTheDocument();
-    // Still inside the layout — the nav is present.
+    // Still inside the layout: the nav is present.
     expect(screen.getByRole('link', { name: 'PostHub' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Page not found' })).not.toBeInTheDocument();
   });
@@ -47,8 +46,8 @@ describe('Post detail', () => {
 
     expect(await screen.findByText('First comment')).toBeInTheDocument();
     expect(screen.getByText('My own comment')).toBeInTheDocument();
-    // Anonymous: a login prompt inside the thread (scoped — the nav also has a
-    // "Log in" link), and no textarea.
+    // Anonymous: a login prompt inside the thread and no textarea. The query is
+    // scoped because the nav also has a "Log in" link.
     const thread = screen.getByRole('region', { name: 'Comments' });
     expect(within(thread).getByRole('link', { name: 'Log in' })).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();

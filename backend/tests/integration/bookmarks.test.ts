@@ -3,10 +3,6 @@ import request from 'supertest';
 import app from '../../src/app';
 import { seedUser, seedPost } from '../helpers/db';
 
-// Bookmarks — the private toggle (/api/posts/:postId/bookmark) plus the saved-post
-// listing (/api/bookmarks). Driven through the real app + posthub_test. All three
-// endpoints are authed; the listing is scoped to the session user by definition.
-
 async function registerAgent(creds: {
   username: string;
   email: string;
@@ -39,7 +35,7 @@ describe('PUT/DELETE /api/posts/:postId/bookmark', () => {
     const first = await agent.put(`/api/posts/${postId}/bookmark`);
     expect(first.status).toBe(200);
     expect(first.body).toEqual({ postId, bookmarkedByMe: true });
-    // Bookmarks are private — no tally is leaked.
+    // Bookmarks are private, so no count is returned.
     expect(first.body).not.toHaveProperty('likeCount');
 
     const again = await agent.put(`/api/posts/${postId}/bookmark`);

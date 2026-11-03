@@ -9,9 +9,6 @@ import { PostForm, type PostFormValues } from '../components/PostForm';
 import { useAsync } from '../hooks/useAsync';
 import styles from './PostForm.page.module.css';
 
-// docs/screens.md §7 — Edit post. RequireAuth-guarded, with an in-screen owner check
-// (the client can't know the author until the post loads). A non-owner sees a
-// "can't edit" state; the real gate is the backend 403 on PATCH.
 export function EditPost() {
   const { postId } = useParams();
   const id = Number(postId);
@@ -81,8 +78,8 @@ export function EditPost() {
     );
   }
 
-  // The card/detail categories carry only {name, slug} — map their slugs back to
-  // ids (the shape the API takes) via the full category list.
+  // Cards and details carry only category name and slug, so the slugs are
+  // mapped back to ids, which the API takes, using the full category list.
   const categoryIds = post.categories
     .map((tag) => categories.find((c) => c.slug === tag.slug)?.id)
     .filter((cid): cid is number => cid !== undefined);

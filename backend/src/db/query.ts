@@ -1,14 +1,12 @@
 import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { pool } from './pool';
 
-// The interface every service will use to talk to the database.
-//
-// Params are always passed as the second argument, never interpolated into the
-// SQL string. That is the whole point: `$1, $2` placeholders let Postgres treat
-// values as data, closing off SQL injection. Building SQL with template strings
-// is the one thing not to do here.
+// Values always go in `params`, never into the SQL string. With $1, $2
+// placeholders, PostgreSQL receives them separately and treats them as data, so
+// they cannot inject SQL. Template strings may only assemble fixed SQL fragments
+// and placeholder names.
 
-// Raw escape hatch — full QueryResult when you need rowCount, command, etc.
+// Returns the full QueryResult, for callers that need rowCount.
 export function query<T extends QueryResultRow>(
   sql: string,
   params?: unknown[],
@@ -16,7 +14,6 @@ export function query<T extends QueryResultRow>(
   return pool.query<T>(sql, params);
 }
 
-// The common case: give me the rows.
 export async function queryMany<T extends QueryResultRow>(
   sql: string,
   params?: unknown[],
@@ -25,8 +22,7 @@ export async function queryMany<T extends QueryResultRow>(
   return result.rows;
 }
 
-// Fetch a single row, or null if the query matched nothing. Use for lookups by
-// primary key or another unique column.
+// Returns only the first row, so use it for lookups by a unique column.
 export async function queryOne<T extends QueryResultRow>(
   sql: string,
   params?: unknown[],
@@ -35,12 +31,10 @@ export async function queryOne<T extends QueryResultRow>(
   return result.rows[0] ?? null;
 }
 
-// Run several statements atomically on one connection. Checks out a client,
-// BEGIN, runs `fn`, COMMIT; on any throw it ROLLBACKs and re-throws; the client
-// is released in every path. Reach for this whenever a single logical operation
-// spans more than one statement — creating a post and attaching its categories,
-// inserting a like and its notification — so a mid-sequence failure leaves no
-// half-written state.
+// For any operation that takes several statements, such as inserting a like and
+// its notification, so a failure halfway leaves nothing half-written. Every
+// statement must go through `tx`: query() would take another connection and run
+// outside the transaction.
 export async function withTransaction<T>(
   fn: (tx: PoolClient) => Promise<T>,
 ): Promise<T> {

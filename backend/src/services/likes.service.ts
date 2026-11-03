@@ -4,12 +4,9 @@ import { notFound } from '../errors/httpError';
 import { assertPostExists } from './posts.service';
 import { insertNotification } from './notifications.service';
 
-// Likes: an idempotent toggle over the post_likes composite-PK table. The row's
-// existence *is* the like, so "like" is an INSERT and "unlike" a DELETE — both
-// safe to repeat. Each returns the fresh public count plus the resulting state,
-// so the client re-renders without a refetch (docs/api_design.md "Likes").
-//
-// No req/res/session here; the session user arrives as a plain `userId`.
+// The row's existence is the like, so liking is an INSERT and unliking a
+// DELETE, and both are safe to repeat. Each returns the new count and state,
+// so the client can update without refetching.
 
 export interface LikeState {
   postId: number;
@@ -26,8 +23,8 @@ async function countLikes(postId: number): Promise<number> {
 }
 
 export async function likePost(userId: number, postId: number): Promise<LikeState> {
-  // The author is the notification recipient; this SELECT also serves as the
-  // existence check (null → 404), replacing a bare assertPostExists.
+  // This SELECT is both the existence check (404 if missing) and the lookup of
+  // the post author, who gets the notification.
   const post = await queryOne<{ author_id: number }>(
     'SELECT author_id FROM posts WHERE id = $1',
     [postId],
@@ -36,8 +33,8 @@ export async function likePost(userId: number, postId: number): Promise<LikeStat
 
   try {
     await withTransaction(async (tx) => {
-      // ON CONFLICT DO NOTHING makes a repeat like a no-op — liking twice isn't an
-      // error. RETURNING lets us notify only on a genuine new like (rowCount > 0).
+      // ON CONFLICT DO NOTHING makes a repeat like a no-op. rowCount is then 0, so
+      // only a new like sends a notification.
       const inserted = await tx.query(
         `INSERT INTO post_likes (user_id, post_id) VALUES ($1, $2)
          ON CONFLICT DO NOTHING RETURNING user_id`,
@@ -54,8 +51,7 @@ export async function likePost(userId: number, postId: number): Promise<LikeStat
       }
     });
   } catch (err) {
-    // The post could be deleted between the existence check and the insert; the
-    // FK violation means it's gone, so surface the same 404, not a 500.
+    // The post was deleted between the check and the insert: 404, not 500.
     if (isForeignKeyViolation(err)) throw notFound('Post not found');
     throw err;
   }
@@ -64,7 +60,6 @@ export async function likePost(userId: number, postId: number): Promise<LikeStat
 
 export async function unlikePost(userId: number, postId: number): Promise<LikeState> {
   await assertPostExists(postId);
-  // Deleting a like that isn't there simply affects zero rows — idempotent.
   await query('DELETE FROM post_likes WHERE user_id = $1 AND post_id = $2', [userId, postId]);
   return { postId, likeCount: await countLikes(postId), likedByMe: false };
 }

@@ -6,35 +6,31 @@ export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl: process.env.DATABASE_URL || '',
 
-  // TLS to the database. Off for local Compose Postgres (which doesn't speak
-  // it); on for managed databases like RDS that require it. Set DATABASE_SSL=true
-  // in those environments, or pass ?sslmode=require in DATABASE_URL and mirror
-  // it here.
+  // On for RDS, which requires TLS (docker-compose.prod.yml sets it), and off for
+  // the local Compose database. Do not add ?sslmode=require to DATABASE_URL: pg
+  // would replace the ssl setting in pool.ts and verify RDS's certificate, which
+  // fails without the AWS CA bundle.
   databaseSsl: process.env.DATABASE_SSL === 'true',
 
-  // Signs the session cookie. The fallback is a THROWAWAY for local dev only —
-  // same rationale as the committed posthub/posthub DB creds: it unlocks nothing
-  // real. When deployment gets real, set a strong SESSION_SECRET from a
-  // git-ignored .env (see CLAUDE.md); rotating it invalidates all sessions.
+  // Signs the session cookie. The fallback is for local development only, and
+  // docker-compose.prod.yml requires a real value. Changing it signs every user
+  // out, because existing cookies no longer verify.
   sessionSecret: process.env.SESSION_SECRET || 'dev-insecure-secret',
 
-  // S3 uploads (POST /api/uploads/presign). Absent in local dev → the endpoint
-  // answers 503 and the feature stays dormant (imageKey/avatar_key are nullable,
-  // so posts and profiles work without it). The minimum to sign is S3_BUCKET +
-  // AWS_REGION; the AWS_* key pair is OPTIONAL — omit both to use an EC2 instance
-  // role (the SDK's default credential chain resolves it from instance metadata),
-  // which is how the deployed stack runs. Presigning is a purely local signature,
-  // so throwaway values are enough to exercise the endpoint offline.
+  // Without S3_BUCKET and AWS_REGION, POST /api/uploads/presign answers 503, and
+  // posts and profiles still work, without images. The AWS key pair is optional:
+  // with both unset, the SDK uses the EC2 instance role, as in production.
+  // Presigning is computed locally, so placeholder values are enough to try the
+  // endpoint offline.
   s3Bucket: process.env.S3_BUCKET || '',
   awsRegion: process.env.AWS_REGION || '',
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   uploadTtl: Number(process.env.UPLOAD_URL_TTL) || 300,
 
-  // Public read base for stored keys → a browser-loadable URL. This is the
-  // CloudFront distribution domain (the bucket itself is private behind OAC), e.g.
-  // https://d1234.cloudfront.net. INDEPENDENT of the presign vars above: unset →
-  // avatarUrl/imageUrl resolve to null and no image renders, set → key becomes
-  // `${base}/${key}`. See keyToPublicUrl in posts.service.ts.
+  // The CloudFront domain that serves uploaded images (the bucket is private),
+  // e.g. https://d1234.cloudfront.net. It is independent of the S3 settings
+  // above: while it is unset, image URLs are null. See keyToPublicUrl in
+  // posts.service.ts.
   s3PublicBaseUrl: process.env.S3_PUBLIC_BASE_URL || '',
 };

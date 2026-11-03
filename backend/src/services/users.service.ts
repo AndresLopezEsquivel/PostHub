@@ -10,22 +10,16 @@ import {
 } from './posts.service';
 import { insertNotification } from './notifications.service';
 
-// Users + follows data access + validation + row→API mapping. Like the other
-// services it holds no req/res/session: the session user is passed in as a plain
-// `userId` (the actor) or `viewerId` (the reader, or null for anonymous). This is
-// where the <profile> and <followUser> shapes are assembled and the derived
-// counts (post/follower/following) are computed as COUNT(*), never denormalized.
+// Profiles, profile updates and follows. The post, follower and following
+// counts are computed with COUNT(*) on each read, never stored, so they can't
+// drift.
 
-const BCRYPT_COST = 10; // matches auth.service.ts, so hashes stay interchangeable
+const BCRYPT_COST = 10;
 
-// Mirrors auth.service's registration rules — the same normalize/regex/length a
-// new email must pass, applied here to an email *change*.
+// Same email rules as registration in auth.service, applied to an email change.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AVATAR_KEY_MAX = 255; // users.avatar_key varchar(255)
 
-// --- API shapes (camelCase, client-facing) -------------------------------
-
-// The public profile, exactly as documented in docs/api_design.md getUserProfile.
 export interface UserProfile {
   username: string;
   bio: string | null;
@@ -37,9 +31,8 @@ export interface UserProfile {
   followedByMe: boolean;
 }
 
-// A row in a followers/following list: the shared <user> (username + avatarUrl)
-// plus bio, plus the viewer-relative followedByMe the list screen needs to render
-// a per-row follow button. `false` for anonymous readers.
+// A row in a followers or following list. followedByMe drives each row's
+// follow button and is false for anonymous viewers.
 export interface FollowUser {
   username: string;
   avatarUrl: string | null;
@@ -54,21 +47,17 @@ export interface FollowUserList {
   total: number;
 }
 
-// The target's new state after a follow/unfollow toggle — returned instead of 204
-// so the client updates in place with no refetch.
+// Returned instead of a 204, so the client can update without refetching.
 export interface FollowState {
   username: string;
   followedByMe: boolean;
   followerCount: number;
 }
 
-// --- Profile query -------------------------------------------------------
-
-// One SELECT body feeds both the public (by username) and the self re-read (by id)
-// paths; the caller supplies the WHERE so the query has a single source of truth.
-// `$1` binds the viewing user's id (or null → the EXISTS never matches → false),
-// the same placeholder technique posts.service's cardSelect uses. int8 COUNT → JS
-// number and bool → JS boolean via the pg parsers in db/types.
+// Serves both the public profile (by username) and the re-read after an
+// update (by id). The caller supplies the WHERE. $1 is the viewer's id: an
+// anonymous viewer binds null, so followed_by_me is false. The COUNTs arrive as
+// numbers because of the int8 parser in db/types.ts.
 const PROFILE_SELECT = `
   SELECT u.username, u.bio, u.avatar_key, u.created_at,
          (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS post_count,
@@ -133,8 +122,6 @@ async function resolveUserId(username: string): Promise<number> {
   return row.id;
 }
 
-// --- Profile update ------------------------------------------------------
-
 function validateBio(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== 'string') {
@@ -175,11 +162,9 @@ function validatePassword(value: unknown): string {
   return password;
 }
 
-// Partial update of the session user's own profile. `username` in the body is a
-// 400, not a silent drop — usernames are immutable, and a silent ignore would
-// hide a client bug. Only the fields present in the body are touched. No current-
-// password re-auth on a password change (the spec doesn't require it); tighten
-// here if that policy ever changes.
+// Updates only the fields present in the body. A username in the body is a
+// 400, not silently ignored: usernames can't change, and ignoring it would
+// hide a client bug.
 export async function updateOwnProfile(
   userId: number,
   input: unknown,
@@ -228,12 +213,11 @@ export async function updateOwnProfile(
     }
   }
 
-  // Re-read by id, viewer = self, so the response is the same <profile> shape.
+  // Re-read by id, with the user as the viewer, so the response is a full
+  // profile.
   const row = await fetchProfileRow('u.id = $2', userId, userId);
   return toProfile(row!);
 }
-
-// --- Follower / following lists ------------------------------------------
 
 interface FollowUserRow {
   username: string;
@@ -285,7 +269,7 @@ async function listFollowRelation(
   return { data: rows.map(toFollowUser), page, limit, total };
 }
 
-// Users following `username` — join the follower side (followee_id is the filter).
+// Users who follow username: filter on followee_id, join on follower_id.
 export async function listFollowers(
   username: string,
   params: { page?: unknown; limit?: unknown },
@@ -295,7 +279,7 @@ export async function listFollowers(
   return listFollowRelation(targetId, 'f.followee_id', 'f.follower_id', params, viewerId);
 }
 
-// Users `username` follows — join the followee side (follower_id is the filter).
+// Users that username follows: filter on follower_id, join on followee_id.
 export async function listFollowing(
   username: string,
   params: { page?: unknown; limit?: unknown },
@@ -304,8 +288,6 @@ export async function listFollowing(
   const targetId = await resolveUserId(username);
   return listFollowRelation(targetId, 'f.follower_id', 'f.followee_id', params, viewerId);
 }
-
-// --- User's posts --------------------------------------------------------
 
 export async function listUserPosts(
   username: string,
@@ -316,10 +298,8 @@ export async function listUserPosts(
   return listPostsByAuthor(authorId, params, viewerId);
 }
 
-// --- Follow toggle -------------------------------------------------------
-
-// followerCount = COUNT(*) WHERE followee_id = target — the -er/-ee direction is
-// fixed; a swap silently inverts the feed.
+// Followers are the rows where the target is the followee. Swapping the
+// columns would return the following count instead, with no error.
 async function countFollowers(targetId: number): Promise<number> {
   const row = await queryOne<{ count: number }>(
     'SELECT COUNT(*)::int AS count FROM follows WHERE followee_id = $1',
@@ -339,15 +319,15 @@ export async function followUser(
     throw badRequest('You cannot follow yourself');
   }
   await withTransaction(async (tx) => {
-    // RETURNING lets us notify only on a genuine new follow (rowCount > 0); a
-    // repeat follow is a no-op and produces no second notification.
+    // ON CONFLICT DO NOTHING makes a repeat follow a no-op. rowCount is then 0,
+    // so only a new follow sends a notification.
     const inserted = await tx.query(
       `INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2)
        ON CONFLICT DO NOTHING RETURNING follower_id`,
       [followerId, targetId],
     );
     if (inserted.rowCount && inserted.rowCount > 0) {
-      // No self-notification guard needed — self-follow is already a 400 above.
+      // No self-notification check needed: a self-follow is already a 400 above.
       await insertNotification(tx, {
         recipientId: targetId,
         actorId: followerId,

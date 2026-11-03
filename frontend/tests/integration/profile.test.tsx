@@ -65,8 +65,8 @@ describe('Profile & follows', () => {
     const user = userEvent.setup();
     renderAppAt('/users/bianca/followers');
 
-    // carol is not followed, dave is — scope to carol's row (dave's button is
-    // already pressed, so a page-wide pressed query would be ambiguous).
+    // carol isn't followed and dave is. Scope to carol's row, since dave's button
+    // is already pressed and a page-wide query would match it.
     await screen.findByRole('link', { name: 'carol' });
     const carolRow = screen.getByRole('link', { name: 'carol' }).closest('li') as HTMLElement;
     const carolFollow = within(carolRow).getByRole('button', { name: 'Follow' });

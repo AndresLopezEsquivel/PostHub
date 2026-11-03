@@ -2,18 +2,15 @@ import { type InputHTMLAttributes, useId } from 'react';
 
 import styles from './TextField.module.css';
 
-// The one labelled-input primitive every form in the app builds on. Its whole job
-// is the pattern pass 1 exists to establish: a field that can render the message
-// carried by an ApiError.field, wired for assistive tech.
+// The labelled input every form uses.
 //
-// `error` is a string, not a boolean: the same slot shows a client-side validation
-// message (mirrored from the backend's own rules) or the backend's own 400/409
-// message, so a caller never has to decide which. When it is set, the input is
-// marked aria-invalid and pointed at the message via aria-describedby, and the
-// message is a role="alert" so a screen reader announces it on appearance.
+// error is a string, so the same slot shows either a client-side validation
+// message or the backend's 400/409 message. When set, the input gets
+// aria-invalid and aria-describedby pointing at the message, which has
+// role="alert" so screen readers announce it.
 //
-// It forwards ...rest to the <input>, so a caller adds type, autoComplete,
-// minLength, required, etc. without this component enumerating them.
+// Other props are passed to the <input>, so callers can add type,
+// autoComplete, required and so on.
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   name: string;

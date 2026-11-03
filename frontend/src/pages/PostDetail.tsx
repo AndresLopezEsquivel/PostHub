@@ -11,11 +11,6 @@ import { useAsync } from '../hooks/useAsync';
 import { formatDate } from '../lib/date';
 import styles from './PostDetail.module.css';
 
-// docs/screens.md §5 — Post detail. Public to read; writing (comments) requires
-// auth, handled inside CommentThread.
-//
-// Deferred, matching CLAUDE.md's screen order: follow author (pass 6). Like/bookmark
-// (pass 4) and the author-only edit/delete (pass 5) are wired below.
 export function PostDetail() {
   const { postId } = useParams();
   const id = Number(postId);
@@ -33,9 +28,9 @@ export function PostDetail() {
   }
 
   if (state.status === 'error') {
-    // A missing post is a state of THIS screen, not an unmatched URL — so render it
-    // here rather than redirecting to the NotFound route. 404 gets its own copy;
-    // anything else is a generic failure with a retry.
+    // A missing post is a state of this screen, not an unmatched URL, so it's
+    // shown here instead of redirecting to NotFound. A 404 gets its own message;
+    // any other error gets a retry.
     const notFound = isApiError(state.error) && state.error.status === 404;
     return (
       <section className={styles.page}>
@@ -93,8 +88,8 @@ export function PostDetail() {
 
         <EngagementBar post={post} />
 
-        {/* Author-only controls. Ownership is username-based (no user id in the
-            API); this is UX — the real gate is the backend 403 on PATCH/DELETE. */}
+        {/* Author-only controls. Usernames are compared because the API exposes no
+            user id; the backend's 403 on PATCH and DELETE is the real check. */}
         {user?.username === post.author.username && (
           <div className={styles.authorActions}>
             <Link to={`/posts/${post.id}/edit`} className={styles.editLink}>

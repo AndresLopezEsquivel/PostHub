@@ -4,10 +4,9 @@ import app from '../../src/app';
 import { query } from '../../src/db/query';
 import { seedCategories } from '../helpers/db';
 
-// GET /api/categories — read-only reference data, no auth, unpaginated.
-// NOTE: categories is reference data, so resetDb() in beforeEach deliberately
-// does NOT truncate it (unlike the domain tables). Each test here therefore
-// sets up the exact category set it asserts on — seeding it, or clearing it.
+// resetDb() in beforeEach leaves categories alone because they're reference
+// data, so each test sets up the exact categories it checks, by seeding them
+// or clearing them.
 describe('GET /api/categories', () => {
   it('returns the seeded categories as a plain array in name order', async () => {
     await seedCategories(); // Philosophy, Fiction, Technology

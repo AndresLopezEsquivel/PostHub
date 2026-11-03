@@ -2,11 +2,10 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../../src/app';
 
-// Uploads — the presign endpoint driven through the real app. Throwaway S3 creds
-// are injected via vitest.config's integration `env`, so the endpoint is
-// "configured" and the SDK signs a real (offline) URL; no bucket is contacted.
-// The 503-when-unconfigured path is covered by the unit test, since flipping the
-// config off is only controllable there.
+// Throwaway S3 credentials come from the integration `env` in vitest.config.ts,
+// so the endpoint is "configured" and the SDK signs a real URL offline; no
+// bucket is contacted. The 503 path for missing config is covered by the unit
+// test, since only there can the config be switched off.
 
 async function registerAgent(creds: {
   username: string;

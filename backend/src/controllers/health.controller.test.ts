@@ -3,9 +3,9 @@ import type { Request, Response } from 'express';
 import { healthCheck } from './health.controller';
 import * as health from '../db/health';
 
-// Unit test: no database. checkDatabase is mocked so the controller's only real
-// logic — the 200-vs-503 status branch — is exercised in isolation with a
-// minimal fake Response that records what status()/json() were called with.
+// Unit test with no database. checkDatabase is mocked so the only real logic,
+// the 200 or 503 branch, runs in isolation against a minimal fake Response
+// that records the status() and json() calls.
 function fakeRes() {
   const res = {
     statusCode: 200,

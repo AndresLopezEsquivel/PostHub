@@ -3,8 +3,8 @@ import type { Request, Response } from 'express';
 import { errorHandler } from './errorHandler';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: the error → envelope mapping in isolation, with a minimal fake
-// Response recording status()/json(). No app, no HTTP.
+// Unit test with no app or HTTP: the mapping from error to envelope, run
+// against a minimal fake Response that records status() and json().
 function fakeRes() {
   const res = {
     statusCode: 200,

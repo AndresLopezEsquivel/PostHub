@@ -4,10 +4,10 @@ import app from '../../src/app';
 import { queryOne } from '../../src/db/query';
 import { seedUser, seedPost, seedNotification } from '../helpers/db';
 
-// Notifications — the recipient-scoped read/mark endpoints and, crucially, the
-// side-effect producers wired into like/comment/follow. Driven through the real
-// app + posthub_test. Producers are exercised through their real endpoints so the
-// transactional inserts actually run; reads/marks use the recipient's own session.
+// The recipient-scoped read and mark endpoints, and the producers that create
+// notifications on like, comment and follow. Producers run through their real
+// endpoints so the transactional inserts actually happen; reads and marks use
+// the recipient's own session.
 
 // Register a user, returning both a cookie-carrying agent and their numeric id (so
 // tests can own posts / be the recipient of seeded notifications). The register
@@ -87,13 +87,13 @@ describe('notification producers (like / comment / follow)', () => {
     const actorAgent = await registerAgentId(actor);
 
     await actorAgent.agent.put(`/api/posts/${postId}/like`); // 1 notif
-    await actorAgent.agent.put(`/api/posts/${postId}/like`); // idempotent no-op → none
+    await actorAgent.agent.put(`/api/posts/${postId}/like`); // idempotent no-op, no notification
 
     let res = await recip.agent.get('/api/notifications');
     expect(res.body.total).toBe(1);
 
     await actorAgent.agent.delete(`/api/posts/${postId}/like`); // unlike (notif persists)
-    await actorAgent.agent.put(`/api/posts/${postId}/like`); // genuine new like → +1
+    await actorAgent.agent.put(`/api/posts/${postId}/like`); // a genuine new like: +1
 
     res = await recip.agent.get('/api/notifications');
     expect(res.body.total).toBe(2);

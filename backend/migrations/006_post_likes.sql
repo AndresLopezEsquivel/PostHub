@@ -1,12 +1,10 @@
--- post_likes — see docs/database_design.md "POST_LIKES".
+-- The composite primary key allows one like per user per post, enforced by the
+-- database instead of app code. Each row is a like: unliking deletes it, the
+-- like count is COUNT(*) by post_id, and "did I like it?" is a primary key
+-- lookup on (user_id, post_id).
 --
--- The composite PK enforces one like per user per post at the database level,
--- not in app code. Consequences worth naming:
---   * "unlike" is just a DELETE — the row's existence *is* the like
---   * like count       = COUNT(*) WHERE post_id = X
---   * "did I like it?" = does row (me, X) exist — a PK lookup, fast
---
--- That last query is precisely why this cannot be a counter column on posts.
+-- A like counter on posts could not answer "did I like it?", which is why likes
+-- are stored as rows.
 
 CREATE TABLE post_likes (
   user_id    integer     NOT NULL REFERENCES users(id) ON DELETE CASCADE,

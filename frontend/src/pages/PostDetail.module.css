@@ -1,5 +1,3 @@
-/* Post detail. Tokens only. Centred within the shared container width. */
-
 .page {
   max-width: var(--container-width);
   margin: 0 auto;

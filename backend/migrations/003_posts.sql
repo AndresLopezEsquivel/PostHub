@@ -1,12 +1,5 @@
--- posts — the core content table.
--- See docs/database_design.md "POSTS".
---
--- The FK lives on the many side, as it always does. `author_id NOT NULL`
--- enforces "one post has exactly one author"; ON DELETE CASCADE means deleting
--- a user removes their posts.
---
--- No `status` column — drafts are out of scope, which keeps every posts query
--- free of a status filter.
+-- No `status` column: drafts are out of scope, so no posts query needs a
+-- status filter.
 
 CREATE TABLE posts (
   id         serial       PRIMARY KEY,

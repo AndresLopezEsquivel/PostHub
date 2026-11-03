@@ -1,5 +1,3 @@
-/* Explore. Tokens only. The page is centred within the shared container width. */
-
 .page {
   max-width: var(--container-width);
   margin: 0 auto;

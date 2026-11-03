@@ -4,8 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as usersApi from '../api/users';
 import { useFollowToggle } from './useFollowToggle';
 
-// Mirrors usePostToggles.test — the optimistic/rollback/redirect logic in isolation.
-
 const navigate = vi.fn();
 let authStatus: 'authenticated' | 'anonymous' = 'authenticated';
 

@@ -1,13 +1,10 @@
-// Client-side validation for the two auth forms, transcribed field-for-field from
-// backend/src/services/auth.service.ts's validateRegistration. It buys instant
-// feedback before a round trip; it is NOT the authority. The backend re-validates
-// every field and its 400/409 responses map back onto the same inputs as a
-// backstop (see Register.tsx), so a drift here weakens the UX but never the rule.
+// Client-side copies of the rules in validateRegistration
+// (backend/src/services/auth.service.ts), for feedback without a round trip.
+// The backend still checks every field, and Register.tsx shows its 400 and 409
+// errors on the same inputs, so if these drift only the feedback suffers.
 //
-// The regexes and bounds are copied from the backend on purpose — there is no
-// shared package across the process boundary, exactly as the API types are
-// transcribed rather than imported (see api/auth.ts). docs/api_design.md is the
-// contract both sides answer to.
+// The regexes and limits are copied, not imported: the frontend and backend
+// share no package, just as the API types in api/auth.ts are copied.
 
 const USERNAME_RE = /^[a-zA-Z0-9_]+$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -49,8 +46,8 @@ export function validateRegister(fields: RegisterFields): RegisterErrors {
     errors.password = 'Password must be between 8 and 72 characters';
   }
 
-  // Confirm has no backend counterpart — the API takes one password. It exists
-  // only to catch a typo before it becomes a password the user can't reproduce.
+  // Confirm has no backend counterpart: the API takes one password. It catches
+  // a typo before it becomes a password the user can't repeat.
   if (!fields.confirm) {
     errors.confirm = 'Please re-enter your password';
   } else if (fields.password && fields.confirm !== fields.password) {

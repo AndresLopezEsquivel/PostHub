@@ -9,13 +9,11 @@ import { formatDate } from '../lib/date';
 import { Avatar } from './Avatar';
 import styles from './CommentThread.module.css';
 
-// The comment thread on Post detail. Self-contained: it owns the paged list, the
-// "Load more" accumulation, the compose box, and delete-own. PostDetail just drops
-// it in with the post id.
+// Owns the paged list, Load more, the compose box and deleting your own
+// comments; PostDetail only passes the post id.
 //
-// Comments read oldest-first, so a new one belongs at the end — which is why the
-// compose box sits below the list and a freshly posted comment is appended rather
-// than prepended.
+// Comments are oldest first, so the compose box is below the list and a new
+// comment is appended.
 export function CommentThread({ postId }: { postId: number }) {
   const { status: authStatus, user } = useAuth();
   const location = useLocation();
@@ -25,15 +23,14 @@ export function CommentThread({ postId }: { postId: number }) {
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<Comment[]>([]);
   const [total, setTotal] = useState(0);
-  // The last envelope folded into `items`, tracked by identity — NOT by page number.
-  // When `page` bumps, this effect fires once with pageState.data still holding the
-  // PREVIOUS page (useAsync hasn't flipped to 'loading' yet); guarding on the page
-  // number would re-fold that stale data and then skip the real one. Guarding on the
-  // object reference, and reading the envelope's OWN `page` to choose replace/append,
-  // folds each page exactly once regardless of that timing.
+  // The last envelope added to items, compared by reference, not by page
+  // number. Right after page changes, pageState.data still holds the previous
+  // page, so a page-number check would add that page again and skip the new one.
+  // The envelope's own page decides between replacing and appending.
   const folded = useRef<Paginated<Comment> | null>(null);
 
-  // Reset when the post changes (navigating detail → detail without unmount).
+  // Reset when the post changes, such as going from one post to another
+  // without unmounting.
   useEffect(() => {
     setPage(1);
     setItems([]);
@@ -70,7 +67,7 @@ export function CommentThread({ postId }: { postId: number }) {
     setSubmitting(true);
     try {
       const created = await createComment(postId, { content: draft.trim() });
-      // The authoritative server object — append it and bump the count, no refetch.
+      // Append the server's comment and update the count, with no refetch.
       setItems((prev) => [...prev, created]);
       setTotal((t) => t + 1);
       setDraft('');
@@ -127,7 +124,7 @@ export function CommentThread({ postId }: { postId: number }) {
           </button>
         </form>
       ) : (
-        // Anonymous: send them to login carrying where they are, so they return here.
+        // Anonymous users get a login link that brings them back here.
         <p className={styles.loginPrompt}>
           <Link to="/login" state={{ from: location }}>
             Log in
@@ -169,8 +166,8 @@ export function CommentThread({ postId }: { postId: number }) {
                 {comment.updatedAt && <span className={styles.edited}> · edited</span>}
               </p>
               <p className={styles.body}>{comment.content}</p>
-              {/* Ownership is username-based (the API exposes no user id); the
-                  backend 403 is the real gate, this is just the affordance. */}
+              {/* Usernames are compared because the API exposes no user id. This only
+                  hides the button; the backend's 403 is the real check. */}
               {user?.username === comment.author.username && (
                 <button
                   type="button"

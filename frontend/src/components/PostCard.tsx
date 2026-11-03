@@ -7,15 +7,6 @@ import { Avatar } from './Avatar';
 import { EngagementBar } from './EngagementBar';
 import styles from './PostCard.module.css';
 
-// The <postCard> rendered once, reused by Explore first and then Post detail's
-// related lists, Feed, Bookmarks, and Profile posts. The like/bookmark state lives
-// in <EngagementBar> (pass 4), so the card itself stays a thin composition with no
-// state of its own, and every list consumer got the interactive toggle for free.
-// The comment count stays a static label — comment interaction happens on detail.
-//
-// The author avatar renders through <Avatar>, which falls back to an initial when
-// avatarUrl is null (unconfigured S3 or no avatar), so the card degrades cleanly.
-
 export function PostCard({
   post,
   onBookmarkChange,
@@ -42,9 +33,8 @@ export function PostCard({
         <ul className={styles.tags}>
           {post.categories.map((category) => (
             <li key={category.slug}>
-              {/* Filtering Explore is a URL change, so a category tag is just a link
-                  to the filtered list — deep-linkable and shareable like every other
-                  filter state. */}
+              {/* Explore's filters live in the URL, so a category tag is just a link to
+                  the filtered list. */}
               <Link to={`/?category=${category.slug}`} className={styles.tag}>
                 {category.name}
               </Link>

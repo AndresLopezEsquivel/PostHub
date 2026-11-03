@@ -3,11 +3,9 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 
 import { handlers } from './msw/handlers';
 
-// The integration project's stand-in for the outside world, and the reason this
-// layer earns the name: MSW intercepts at the network layer, so the REAL
-// src/api/client.ts runs — its URL building, its credentials, its error-envelope
-// mapping. That is the same parity supertest buys backend/tests/integration
-// against posthub_test, rather than asserting against a mocked module.
+// MSW intercepts requests at the network layer, so the real
+// src/api/client.ts runs (URL building, credentials, error mapping) instead
+// of a mocked module.
 
 export const server = setupServer(...handlers);
 
@@ -21,8 +19,7 @@ beforeAll(() => {
   URL.revokeObjectURL = () => {};
 });
 
-// Drop per-test server.use() overrides so tests stay independent — the analogue
-// of the backend harness truncating its tables between tests.
+// Drop per-test server.use() overrides so tests stay independent.
 afterEach(() => {
   server.resetHandlers();
 });

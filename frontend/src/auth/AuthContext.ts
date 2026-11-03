@@ -2,15 +2,12 @@ import { createContext } from 'react';
 
 import type { LoginInput, PublicUser, RegisterInput } from '../api/auth';
 
-// Split from AuthProvider.tsx because this file holds no JSX: the context object
-// and its types are imported by useAuth and by both guards, and keeping them in a
-// .ts module means those importers don't pull the provider's implementation
-// along with them.
+// Kept apart from AuthProvider.tsx so useAuth and the guards can import the
+// context without pulling in the provider.
 
-// Three states, not a boolean — the single most important decision in the shell.
-// 'loading' is what stops RequireAuth from redirecting while the session probe is
-// still in flight. With a boolean, every authenticated user who hard-refreshes a
-// deep link gets bounced to /login for one tick and loses their destination.
+// Three states, not a boolean: 'loading' stops RequireAuth from redirecting
+// while the session check is still running. With a boolean, a logged-in user
+// who reloads a deep link would be sent to /login and lose their place.
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
 
 export interface AuthContextValue {
@@ -19,12 +16,10 @@ export interface AuthContextValue {
   login(input: LoginInput): Promise<void>;
   register(input: RegisterInput): Promise<void>;
   logout(): Promise<void>;
-  // Re-probe GET /api/auth/session and refresh user/status. Needed because the
-  // session carries the email but UserProfile does not, so after an email change
-  // (Edit profile) this is what keeps user.email current for the next prefill.
+  // Checks the session again. The session has the email but UserProfile
+  // doesn't, so Edit profile calls this after an email change to keep
+  // user.email current.
   refresh(): Promise<void>;
 }
 
-// No default value. A component reading this outside the provider is a wiring
-// bug, and useAuth throws rather than handing back a silently inert object.
 export const AuthContext = createContext<AuthContextValue | null>(null);

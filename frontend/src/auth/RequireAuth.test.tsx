@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthContext';
 import { RequireAuth } from './RequireAuth';
 
-// The guard is pure state → decision, so the context is stubbed directly rather
-// than driven through AuthProvider and the network. What matters is the three-way
-// branch, and especially that 'loading' does not redirect.
+// The context is stubbed directly instead of going through AuthProvider and
+// the network: the test is about the three branches, especially that
+// 'loading' doesn't redirect.
 
 function renderGuardedAt(status: AuthStatus, initialPath = '/bookmarks') {
   const value: AuthContextValue = {
@@ -39,8 +39,6 @@ function renderGuardedAt(status: AuthStatus, initialPath = '/bookmarks') {
 
 describe('RequireAuth', () => {
   it('holds instead of redirecting while the session probe is in flight', () => {
-    // The load-bearing case. Redirecting here would bounce every authenticated
-    // user off their own deep link on a hard refresh, before we know who they are.
     renderGuardedAt('loading');
 
     expect(screen.getByRole('status')).toBeInTheDocument();

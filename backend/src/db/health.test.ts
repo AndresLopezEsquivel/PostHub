@@ -2,10 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { pool } from './pool';
 import { checkDatabase } from './health';
 
-// Unit test: no database. Spy on the pool's query so checkDatabase's two
-// branches are exercised in isolation. Constructing the pool opens no
-// connection, and the spy intercepts the only call, so nothing here touches
-// Postgres — this is the fast, DB-free layer.
+// No database needed: creating the pool opens no connection, and the spy
+// replaces the only query, so nothing here reaches PostgreSQL.
 describe('checkDatabase', () => {
   afterEach(() => {
     vi.restoreAllMocks();

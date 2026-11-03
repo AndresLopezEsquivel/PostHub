@@ -8,9 +8,8 @@ import { routes } from '../../src/routes';
 import { postsEmpty, postsError } from '../msw/handlers';
 import { server } from '../setup';
 
-// Explore end to end: the real route table, the real api/client.ts, and the real
-// useAsync machinery driven against the query-aware MSW posts/categories handlers.
-// The default session handler answers 401, so this exercises the anonymous path.
+// Explore end to end against the query-aware MSW handlers. The default
+// session handler returns 401, so this is the anonymous path.
 function renderAppAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   return render(
@@ -20,7 +19,7 @@ function renderAppAt(path: string) {
   );
 }
 
-// The rendered post titles, in order — each PostCard title is an <h2>.
+// The post titles in order; each PostCard title is an <h2>.
 function cardTitles(): string[] {
   return screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent ?? '');
 }
@@ -30,7 +29,7 @@ describe('Explore', () => {
     renderAppAt('/');
 
     expect(await screen.findByRole('link', { name: 'Alpha' })).toBeInTheDocument();
-    // limit 2, newest order Alpha, Bravo, Charlie → page 1 is Alpha, Bravo.
+    // limit 2 and newest first (Alpha, Bravo, Charlie), so page 1 is Alpha and Bravo.
     expect(cardTitles()).toEqual(['Alpha', 'Bravo']);
   });
 
@@ -68,7 +67,7 @@ describe('Explore', () => {
 
     await user.click(screen.getByRole('button', { name: 'Most liked' }));
 
-    // likeCount order Bravo(5), Charlie(3), Alpha(1) → page 1 is Bravo, Charlie.
+    // By likeCount: Bravo (5), Charlie (3), Alpha (1), so page 1 is Bravo and Charlie.
     await screen.findByRole('link', { name: 'Charlie' });
     expect(cardTitles()).toEqual(['Bravo', 'Charlie']);
     expect(screen.queryByRole('link', { name: 'Alpha' })).not.toBeInTheDocument();

@@ -1,6 +1,5 @@
-/* A small modern reset. Everything here neutralises a browser default that would
-   otherwise have to be overridden repeatedly; nothing here expresses a design
-   choice — those live in tokens.css and base.css. */
+/* Clears browser defaults that would otherwise be overridden again and again.
+   Design choices go in tokens.css and base.css. */
 
 *,
 *::before,

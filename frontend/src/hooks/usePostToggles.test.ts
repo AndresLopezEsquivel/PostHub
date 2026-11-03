@@ -5,9 +5,6 @@ import * as bookmarksApi from '../api/bookmarks';
 import * as likesApi from '../api/likes';
 import { usePostToggles } from './usePostToggles';
 
-// The optimistic/rollback/redirect logic in isolation — the part worth a unit test.
-// Collaborators are mocked: the API modules, useAuth (status), and router navigation.
-
 const navigate = vi.fn();
 let authStatus: 'authenticated' | 'anonymous' = 'authenticated';
 

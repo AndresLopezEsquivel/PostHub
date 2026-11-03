@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: no database. The db/query helper and bcryptjs are mocked so the
-// service's logic — validation, the row→PublicUser mapping, and the 23505→409
-// constraint mapping — is exercised without hashing or connecting.
+// Unit test with no database. db/query and bcryptjs are mocked, so validation,
+// the row to PublicUser mapping and the 23505 to 409 mapping run without
+// hashing or connecting.
 vi.mock('../db/query', () => ({
   queryOne: vi.fn(),
 }));

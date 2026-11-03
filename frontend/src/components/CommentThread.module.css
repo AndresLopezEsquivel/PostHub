@@ -1,5 +1,3 @@
-/* The comment thread. Tokens only (see styles/tokens.css). */
-
 .thread {
   display: flex;
   flex-direction: column;

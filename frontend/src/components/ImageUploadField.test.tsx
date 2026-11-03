@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
 import { ImageUploadField } from './ImageUploadField';
 
-// uploadImage is the network boundary; mock it so the field's own lifecycle (preview,
-// pending, intent reporting, error) is what's under test. vi.hoisted so the mock fn
-// exists when the (hoisted) vi.mock factory runs.
+// uploadImage is mocked so the test covers the field itself: preview,
+// pending, the reported intent and errors. vi.hoisted makes the mock exist
+// when the hoisted vi.mock factory runs.
 const { uploadImage } = vi.hoisted(() => ({ uploadImage: vi.fn() }));
 vi.mock('../api/uploads', () => ({ uploadImage }));
 

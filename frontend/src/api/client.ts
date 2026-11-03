@@ -1,17 +1,7 @@
-// The one place this app touches the network. Every screen goes through a
-// resource module (api/auth.ts, api/posts.ts, …) and every resource module goes
-// through request<T>() — so there is exactly one implementation of "how a PostHub
-// request is made" and exactly one shape for "how it failed".
-//
-// Deliberately absent: any base URL, host, or port. docs/api_design.md fixes the
-// base path at /api and the browser only ever addresses the frontend origin —
-// Vite proxies /api in dev, nginx does in production. A VITE_API_URL would make
-// every request cross-origin, which breaks the session cookie outright, since the
-// backend mounts no CORS middleware on purpose.
-//
-// Also deliberately absent: caching, retries, and request deduplication. Screens
-// own their own loading state for now. If that stops scaling, that is the moment
-// to justify a data-fetching library — not before.
+// No base URL: the browser only talks to its own origin, and Vite (dev) or
+// nginx (production) proxies /api to the backend. A separate API origin
+// would make every request cross-origin, which the backend doesn't allow
+// (it has no CORS middleware).
 
 const BASE = '/api';
 
@@ -19,10 +9,8 @@ export interface ApiErrorBody {
   error: { message: string; field?: string };
 }
 
-// Every list endpoint returns this envelope (docs/api_design.md, "Pagination").
-// Flat by design: no hasMore, no totalPages — the client derives those from
-// page/limit/total. GET /api/notifications adds a top-level unreadCount, which
-// that module extends rather than this one absorbing.
+// The envelope of the paginated list endpoints. The client works out page
+// counts from page, limit and total.
 export interface Paginated<T> {
   data: T[];
   page: number;
@@ -30,10 +18,8 @@ export interface Paginated<T> {
   total: number;
 }
 
-// The client-side twin of backend/src/errors/httpError.ts. One class carries
-// status, message, and the optional `field`, so a caller can branch on the status
-// (401 → logged out, 403 → not yours, 404 → gone, 409 → taken) and a form can
-// attach the message to the input named by `field`.
+// Mirrors the backend's HttpError. `field` names the input a form should
+// show the message next to.
 export class ApiError extends Error {
   readonly status: number;
   readonly field?: string;
@@ -54,9 +40,8 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   signal?: AbortSignal;
-  // Optional query params. Undefined entries are dropped, so callers can forward
-  // optional filters straight through without building strings by hand or
-  // emitting `?category=undefined`.
+  // Undefined entries are dropped, so callers can pass optional filters
+  // through as they are.
   query?: Record<string, string | number | boolean | undefined>;
 }
 
@@ -93,9 +78,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const response = await fetch(BASE + path + buildQuery(query), {
     method,
     signal,
-    // Same-origin by construction, but stated explicitly: posthub.sid is the only
-    // credential this app has, it is httpOnly (unreadable from JS), and every
-    // authenticated request depends on the browser attaching it.
+    // Same-origin is already the default. It's set explicitly because every
+    // authenticated request depends on the browser sending the httpOnly
+    // session cookie.
     credentials: 'same-origin',
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -112,7 +97,6 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     );
   }
 
-  // A 204 from a DELETE or a no-op idempotent PUT has nothing to parse. Callers
-  // type those as request<void>.
+  // A 204 (a DELETE or logout) has no body. Callers type those as request<void>.
   return payload as T;
 }

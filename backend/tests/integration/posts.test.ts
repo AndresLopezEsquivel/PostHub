@@ -4,9 +4,9 @@ import app from '../../src/app';
 import { queryOne } from '../../src/db/query';
 import { seedUser, seedCategories, seedPost } from '../helpers/db';
 
-// /api/posts — driven through the real app + posthub_test. Reads are public, so
-// plain request(app) suffices; authed writes use request.agent(app) to carry the
-// session cookie from register through the write.
+// Reads are public, so plain request(app) is enough; authed writes use
+// request.agent(app) to carry the session cookie from register through the
+// write.
 
 async function registerAgent(creds: {
   username: string;
@@ -192,7 +192,7 @@ describe('GET /api/posts/:postId', () => {
       title: 'On absurdism',
       content: 'Camus opens with…',
       imageKey: 'posts/42.jpg',
-      imageUrl: null, // no S3_PUBLIC_BASE_URL in the test env → unresolved
+      imageUrl: null, // no S3_PUBLIC_BASE_URL in the test env, so no URL
       updatedAt: null,
     });
   });

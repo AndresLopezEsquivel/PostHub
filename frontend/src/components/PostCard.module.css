@@ -1,6 +1,3 @@
-/* The post card. Tokens only — no hardcoded colour or spacing (see
-   styles/tokens.css). One card, reused by every list screen. */
-
 .card {
   display: flex;
   flex-direction: column;

@@ -2,9 +2,7 @@ import { Request, Response } from 'express';
 import * as commentsService from '../services/comments.service';
 import { parsePostId, parseCommentId, requireUserId } from './http';
 
-// Thin HTTP layer over comments.service. The list/create routes are post-scoped
-// (:postId from the parent mount, mergeParams); update/delete are comment-scoped
-// (:commentId). No viewer threading — comments carry no per-viewer state.
+// Comments carry no per-viewer state, so these handlers don't pass a viewer id.
 
 export async function listPostComments(req: Request, res: Response): Promise<void> {
   const { page, limit } = req.query;

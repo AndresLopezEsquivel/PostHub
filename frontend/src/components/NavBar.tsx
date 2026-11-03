@@ -5,13 +5,11 @@ import { useAuth } from '../auth/useAuth';
 import { useUnread } from '../notifications/useUnread';
 import styles from './NavBar.module.css';
 
-// A global search box, present on every screen per docs/screens.md. It owns no
-// results — submitting just navigates to Explore with ?search=, which Explore reads
-// as the single source of that filter. Empty submit clears the search (→ '/').
+// Search box on every screen. It has no results of its own: submitting goes
+// to Explore with ?search=, and an empty search goes to '/'.
 //
-// Uncontrolled, keyed on the active ?search value: the key remounts the input so
-// its defaultValue re-syncs when the term changes elsewhere (e.g. Explore's "clear"
-// button), without threading controlled state through the URL.
+// Uncontrolled and keyed on the current ?search value, so the input resets
+// when the search changes elsewhere, such as Explore's clear button.
 function SearchForm() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -37,16 +35,6 @@ function SearchForm() {
   );
 }
 
-// The navigation bar from docs/screens.md's "Cross-cutting surfaces". Two link
-// sets, chosen by session state:
-//
-//   authenticated — logo · Explore · search · Feed · notifications · bookmarks ·
-//                   create post · profile · logout
-//   anonymous     — logo · Explore · search · Login · Register
-//
-// Deferred to a later pass, deliberately: the avatar menu — the session response
-// carries no avatar, and avatarUrl is stubbed null backend-side, so there is nothing
-// to render yet.
 export function NavBar() {
   const { status, user, logout } = useAuth();
   const { unreadCount } = useUnread();
@@ -71,9 +59,8 @@ export function NavBar() {
 
         <SearchForm />
 
-        {/* 'loading' renders neither set. Showing the anonymous links while the
-            session probe is in flight would flash "Login" at someone who is
-            already signed in — the same reasoning as the guards' loading hold. */}
+        {/* 'loading' shows neither set, so a logged-in user doesn't see "Log in"
+            flash while the session check runs. */}
         {status === 'authenticated' && user && (
           <>
             <NavLink to="/feed">Feed</NavLink>

@@ -1,9 +1,6 @@
--- post_categories — the join table making categories many-to-many.
--- See docs/database_design.md "POST_CATEGORIES".
---
--- The composite PK is doing real work: it blocks tagging a post "Philosophy"
--- twice, the pair *is* the identity so no surrogate id is needed, and it
--- provides a free index on the leading column (post_id).
+-- The composite primary key does three jobs: it stops a post from getting the
+-- same category twice, it makes a separate `id` column unnecessary, and its
+-- index also serves lookups by post_id, its leading column.
 
 CREATE TABLE post_categories (
   post_id     integer NOT NULL REFERENCES posts(id) ON DELETE CASCADE,

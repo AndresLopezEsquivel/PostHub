@@ -2,10 +2,8 @@ import type { FollowState } from '../api/users';
 import { useFollowToggle } from '../hooks/useFollowToggle';
 import styles from './FollowButton.module.css';
 
-// The follow/unfollow control, used on Profile and on every followers/following row.
-// State lives in useFollowToggle; this is just the button. aria-pressed conveys the
-// followed state (stable aria-label "Follow"). The count is public; the click gates
-// on auth (the hook redirects an anonymous visitor to login).
+// Used on Profile and in follower lists; the state lives in useFollowToggle.
+// aria-pressed shows whether you follow, and the aria-label stays "Follow".
 export function FollowButton({
   username,
   initialFollowing,

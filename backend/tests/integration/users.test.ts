@@ -3,10 +3,9 @@ import request from 'supertest';
 import app from '../../src/app';
 import { seedUser, seedPost, seedFollow } from '../helpers/db';
 
-// Users + follows — the public profile and its sub-lists, the self profile update,
-// and the follow toggle, driven through the real app + posthub_test. Reads are
-// public; authed writes use request.agent to carry the session cookie. Also proves
-// the derived counts and the viewer-relative followedByMe on the profile and lists.
+// Reads are public; authed writes use request.agent to carry the session
+// cookie. Also checks the derived counts and the viewer-relative followedByMe
+// on the profile and lists.
 
 async function registerAgent(creds: {
   username: string;

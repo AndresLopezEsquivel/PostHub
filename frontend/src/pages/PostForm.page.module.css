@@ -1,6 +1,3 @@
-/* Shared page shell for Create and Edit post — the centred column both render the
-   PostForm inside. Tokens only (see styles/tokens.css). */
-
 .page {
   max-width: var(--container-width);
   margin: 0 auto;

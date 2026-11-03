@@ -3,30 +3,23 @@ import { join } from 'node:path';
 import type { Pool } from 'pg';
 import { pool, closePool } from './pool';
 
-// Forward-only SQL migration runner. Applies every backend/migrations/*.sql
-// file that has not been applied yet, in filename order, each in its own
-// transaction, recording what ran in a schema_migrations ledger.
+// Forward-only: there are no down migrations. Each file runs once, in filename
+// order, and is recorded in schema_migrations.
 //
-// Run as a DEPLOY STEP, never at app boot:
-//   local: docker compose exec api npm run migrate
-//   prod:  a one-off task (ECS run-task / release command) before the new
-//          web revision goes live.
-// server.ts must never call this — a web process that migrates on start
-// migrates once per replica and races itself.
+// Migrating is a separate deploy step (see README.md), never part of server
+// startup: every replica would migrate on start and race the others.
 
-// Fixed key for pg_advisory_lock. Serializes concurrent runners (e.g. two ECS
-// tasks deploying at once): the second blocks here, then finds every file
-// already applied and does nothing. The value is arbitrary but must be stable.
-const MIGRATION_LOCK_KEY = 4021775; // "posthub migrations", any constant works
+// The pg_advisory_lock key. Two runners started at once share it, so the second
+// waits, then finds every file applied. Any constant works, but it must never
+// change, or an old and a new runner would not block each other.
+const MIGRATION_LOCK_KEY = 4021775;
 
-// src/db → ../../migrations = backend/migrations. Holds for the compiled layout
-// too (dist/db → ../../migrations), provided the image ships the SQL files.
+// ../../migrations is backend/migrations from both src/db and dist/db. tsc does
+// not copy the SQL files, so backend/Dockerfile copies them.
 const MIGRATIONS_DIR = join(__dirname, '../../migrations');
 
-// Apply all pending migrations against `db`. Exported (rather than run inline)
-// so a caller can point it at a different database than the shared process pool
-// — the test harness migrates posthub_test by passing a pool bound to it. The
-// CLI path below calls it with no argument, so it defaults to the shared pool.
+// Takes a pool so test-setup-cli.ts can migrate posthub_test instead of the
+// main database.
 export async function runMigrations(db: Pool = pool): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -61,9 +54,8 @@ export async function runMigrations(db: Pool = pool): Promise<void> {
       const sql = readFileSync(join(MIGRATIONS_DIR, filename), 'utf8');
       const client = await db.connect();
       try {
-        // One transaction per file: a failing migration rolls back cleanly and
-        // halts the run, leaving every earlier file committed and this one not
-        // recorded — so a fixed re-run resumes exactly here.
+        // One transaction per file: a failing file rolls back and is not
+        // recorded, earlier files stay committed, and a re-run resumes here.
         await client.query('BEGIN');
         await client.query(sql);
         await client.query(
@@ -90,9 +82,8 @@ export async function runMigrations(db: Pool = pool): Promise<void> {
   }
 }
 
-// CLI entrypoint. Guarded by require.main so that importing this module (the
-// test-setup helper does, to reuse runMigrations) neither migrates nor closes
-// the shared pool — only running it directly does.
+// Runs only when executed directly: test-setup-cli.ts imports runMigrations,
+// and importing must not migrate or close the shared pool.
 if (require.main === module) {
   runMigrations()
     .then(() => closePool())

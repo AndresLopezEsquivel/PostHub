@@ -2,11 +2,9 @@ import { useState } from 'react';
 
 import styles from './Avatar.module.css';
 
-// One presentational avatar, reused everywhere a user is shown (post cards, post
-// detail, profile, follow lists, comments) so size, alt text, and the no-image
-// fallback stay consistent. Renders the image when a url is present and loads; falls
-// back to a neutral circle with the name's first initial otherwise — including when a
-// broken src fails to load (onError). Purely presentational: no data fetching.
+// Used everywhere a user is shown, so size, alt text and the fallback stay
+// consistent. Without a url, or when the image fails to load, it shows the
+// name's first letter in a circle.
 
 const SIZES = { sm: styles.sm, md: styles.md, lg: styles.lg } as const;
 

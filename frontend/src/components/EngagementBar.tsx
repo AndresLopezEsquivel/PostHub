@@ -2,14 +2,13 @@ import type { BookmarkState } from '../api/bookmarks';
 import { type Engageable, usePostToggles } from '../hooks/usePostToggles';
 import styles from './EngagementBar.module.css';
 
-// The like + bookmark controls, shared by PostCard and PostDetail. All the state
-// lives in usePostToggles; this is just the two buttons. Takes the minimal set of
-// fields both a PostCard and a PostDetail carry, so either can pass itself.
+// The like and bookmark buttons for PostCard and PostDetail; the state lives
+// in usePostToggles. It takes only the fields both carry, so either can pass
+// itself.
 //
-// State is conveyed with aria-pressed (a stable aria-label — "Like"/"Bookmark" —
-// keeps the accessible name from flipping under the user). The like count is public
-// and shown to everyone; the click itself is what gates on auth (usePostToggles
-// redirects an anonymous visitor to login).
+// State is shown with aria-pressed, and the aria-label stays "Like" or
+// "Bookmark" so the button's name doesn't change under the user. Anyone can
+// see the like count; clicking is what requires login.
 export function EngagementBar({
   post,
   onBookmarkChange,

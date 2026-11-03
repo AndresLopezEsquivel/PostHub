@@ -7,18 +7,9 @@ import { TextField } from '../components/TextField';
 import styles from './AuthForm.module.css';
 import { validateLogin, type LoginErrors } from './authValidation';
 
-// docs/screens.md §2 — Login. Anonymous only.
-//
-// The field is email, not "email or username": the backend authenticates on
-// `WHERE email = $1` (see auth.service.ts authenticate), so email is the only
-// identifier it accepts. A wrong email and a wrong password both come back as one
-// 401 "Invalid credentials" with no `field`, on purpose — revealing which half was
-// wrong would be a user-enumeration oracle — so that error is always form-level.
-//
-// On success this only flips the session to 'authenticated'; the redirect back to
-// where the visitor was headed (RequireAuth's state.from, else '/') is owned by
-// AnonymousOnly, which wraps this route. See that guard for why the form does not
-// navigate itself.
+// A wrong email and a wrong password both get one 401 "Invalid credentials"
+// with no field, so nobody can tell which accounts exist. That error is always
+// shown at form level.
 export function Login() {
   const { login } = useAuth();
 
@@ -40,8 +31,7 @@ export function Login() {
     setSubmitting(true);
     try {
       await login({ email: email.trim(), password });
-      // No navigate here: the auth flip re-renders AnonymousOnly, which performs
-      // the redirect (to state.from or '/'). This component unmounts with it.
+      // No navigate: AnonymousOnly does the redirect once the status changes.
     } catch (error) {
       // 401 carries no field, so it always lands here; a non-ApiError is a
       // transport failure.

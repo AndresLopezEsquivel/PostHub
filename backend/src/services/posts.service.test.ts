@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: no database. The db/query helpers are mocked so the service's pure
-// logic — excerpt/pagination/mapping, validation, ownership, and the 23503→400
-// mapping — is exercised without connecting.
+// Unit test with no database. The db/query helpers are mocked. Covers the
+// excerpt, pagination and mapping, validation, ownership, and the 23503 to 400
+// mapping.
 vi.mock('../db/query', () => ({
   query: vi.fn(),
   queryOne: vi.fn(),
@@ -140,7 +140,6 @@ describe('toPostCard / toPostDetail', () => {
       bookmarked_by_me: true,
     });
 
-    // Steps 4 (likes/bookmarks) and 5 (comments) fill every card field from SQL.
     expect(card).toMatchObject({
       likeCount: 7,
       commentCount: 4,
@@ -160,7 +159,7 @@ describe('toPostCard / toPostDetail', () => {
       id: 42,
       content: 'Camus opens with a short remark.',
       imageKey: 'posts/42.jpg',
-      imageUrl: null, // no S3_PUBLIC_BASE_URL in the test env → unresolved
+      imageUrl: null, // S3_PUBLIC_BASE_URL is unset in the test env
       updatedAt: '2026-07-15T09:00:00Z',
       likeCount: 0,
       likedByMe: false,
@@ -279,6 +278,5 @@ describe('deletePost ownership', () => {
   });
 });
 
-// mockQueryMany is wired for listPosts; asserted end-to-end in the integration
-// suite rather than here (thin SQL-string assertions add little).
+// Unused: listPosts is tested in tests/integration/posts.test.ts.
 void mockQueryMany;

@@ -1,17 +1,12 @@
 import { type Paginated, request } from './client';
 import type { PostCard } from './posts';
 
-// The users + follows resource (docs/api_design.md "Users and follows").
-
-// --- API shapes (mirrors backend/src/services/users.service.ts) --------------
-
-// The public profile. Note what is NOT here: no email — it's private, carried only
-// in the session (GET /api/auth/session), which is why Edit profile prefills email
-// from useAuth().user rather than from this shape.
+// No email: it's private and only comes with the session, so Edit profile
+// prefills it from useAuth().user.
 export interface UserProfile {
   username: string;
   bio: string | null;
-  avatarUrl: string | null; // null until pass 9 wires S3
+  avatarUrl: string | null;
   createdAt: string;
   postCount: number;
   followerCount: number;
@@ -19,8 +14,7 @@ export interface UserProfile {
   followedByMe: boolean;
 }
 
-// A row in a followers/following list: the shared <user> plus bio plus the
-// viewer-relative followedByMe, so each row's follow button needs no second request.
+// Includes followedByMe so each row's follow button needs no extra request.
 export interface FollowUser {
   username: string;
   avatarUrl: string | null;
@@ -28,25 +22,20 @@ export interface FollowUser {
   followedByMe: boolean;
 }
 
-// The target's new state after a follow/unfollow — returned instead of 204 so the
-// client updates in place.
+// Returned instead of a 204 so the client can update in place.
 export interface FollowState {
   username: string;
   followedByMe: boolean;
   followerCount: number;
 }
 
-// Partial update of the session user's own profile. avatarKey is accepted by the
-// backend but not sent this pass (pass 9); username is absent on purpose — it's
-// immutable, and sending it is a 400.
+// No username: it can't be changed, and the backend rejects it with a 400.
 export interface UpdateProfileInput {
   bio?: string | null;
   email?: string;
   password?: string;
   avatarKey?: string | null;
 }
-
-// --- Requests ----------------------------------------------------------------
 
 export function getUserProfile(username: string, signal?: AbortSignal): Promise<UserProfile> {
   return request<UserProfile>(`/users/${username}`, { signal });
@@ -76,8 +65,6 @@ export function listFollowing(
   return request<Paginated<FollowUser>>(`/users/${username}/following`, { query: params, signal });
 }
 
-// PATCH /users/me — the target is the session user (no :username). Answers with the
-// <profile> shape.
 export function updateOwnProfile(input: UpdateProfileInput): Promise<UserProfile> {
   return request<UserProfile>('/users/me', { method: 'PATCH', body: input });
 }

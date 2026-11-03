@@ -1,5 +1,3 @@
-/* The paginated card list. Tokens only (see styles/tokens.css). */
-
 .list {
   display: flex;
   flex-direction: column;

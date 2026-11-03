@@ -4,13 +4,11 @@ import { isUniqueViolation } from '../db/pgErrors';
 import { UserRow } from '../types/db';
 import { badRequest, conflict } from '../errors/httpError';
 
-// Auth data access + validation + row→API mapping. No req/res, no session: the
-// session is request-bound, so opening/closing it lives in the controller. This
-// layer hashes, reads, and validates — and never returns password_hash.
+// No req or res here. The session is tied to the request, so the controller
+// opens and closes it. Nothing this file returns includes password_hash.
 
-const BCRYPT_COST = 10; // matches seed-dev.ts, so seeded users log in too
+const BCRYPT_COST = 10;
 
-// The public shape for a user in auth responses. Never includes password_hash.
 export interface PublicUser {
   username: string;
   email: string;
@@ -20,9 +18,9 @@ export function toPublicUser(row: UserRow): PublicUser {
   return { username: row.username, email: row.email };
 }
 
-// A precomputed hash to compare against when no user matches, so a wrong email
-// and a wrong password cost the same time — no login-timing user-enumeration
-// oracle. The plaintext is irrelevant; it will never match a real password.
+// Compared against when no user matches, so a wrong email and a wrong
+// password take the same time and login timing can't reveal which emails
+// exist. The plaintext never matches a real password.
 const DUMMY_HASH = bcrypt.hashSync('unused-timing-guard', BCRYPT_COST);
 
 const USERNAME_RE = /^[a-zA-Z0-9_]+$/;
@@ -40,9 +38,9 @@ interface ValidRegistration {
   password: string;
 }
 
-// Presence + shape checks, throwing badRequest(…, field) on the first failure.
-// Bounds mirror the schema (username varchar(30)); the password floor is a
-// policy minimum, capped at bcrypt's 72-byte effective limit.
+// Bounds mirror the schema (username varchar(30), email varchar(255)). The
+// password cap counts characters, but bcrypt only uses the first 72 bytes,
+// so a password with multibyte characters is still truncated.
 function validateRegistration(input: RegisterInput): ValidRegistration {
   const username = typeof input.username === 'string' ? input.username.trim() : '';
   const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
@@ -69,17 +67,14 @@ function validateRegistration(input: RegisterInput): ValidRegistration {
   return { username, email, password };
 }
 
-// Read the constraint name off a caught pg error, to attribute a unique-violation
-// to the right field (username vs. email).
 function constraintName(err: unknown): string | undefined {
   return typeof err === 'object' && err !== null
     ? (err as { constraint?: string }).constraint
     : undefined;
 }
 
-// Create the user and return the stored row. Uniqueness is enforced by the DB
-// (username/email UNIQUE); we catch the 23505 and map it to a 409 on the right
-// field rather than pre-checking with a SELECT that would race the INSERT.
+// Uniqueness is left to the UNIQUE constraints, because a SELECT first would
+// race the INSERT. The resulting 23505 becomes a 409 on the matching field.
 export async function registerUser(input: RegisterInput): Promise<UserRow> {
   const { username, email, password } = validateRegistration(input);
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
@@ -91,8 +86,7 @@ export async function registerUser(input: RegisterInput): Promise<UserRow> {
        RETURNING *`,
       [username, email, passwordHash],
     );
-    // queryOne can be null in general, but INSERT ... RETURNING always yields the
-    // row it just wrote; assert it for the type.
+    // INSERT ... RETURNING always returns the row, so the assertion is safe.
     return row!;
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -106,9 +100,9 @@ export async function registerUser(input: RegisterInput): Promise<UserRow> {
   }
 }
 
-// Verify credentials. Returns the row on success, null on any failure (unknown
-// email or wrong password) — the caller maps null to a single 401 that does not
-// reveal which half was wrong. Always runs a bcrypt.compare so timing is uniform.
+// Returns null for an unknown email and for a wrong password alike, so the
+// caller's single 401 doesn't reveal which was wrong. bcrypt.compare runs
+// either way, which keeps the timing the same.
 export async function authenticate(email: unknown, password: unknown): Promise<UserRow | null> {
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   const candidate = typeof password === 'string' ? password : '';
@@ -121,7 +115,6 @@ export async function authenticate(email: unknown, password: unknown): Promise<U
   return row && matches ? row : null;
 }
 
-// Load the session user for GET /api/auth/session.
 export async function getUserById(id: number): Promise<UserRow | null> {
   return queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [id]);
 }

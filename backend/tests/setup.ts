@@ -25,11 +25,11 @@ beforeAll(async () => {
 // A clean slate before every test.
 beforeEach(async () => {
   await resetDb();
-  // Also clear the connect-pg-simple session store. resetDb() recycles user ids
-  // (RESTART IDENTITY), so a session row left over from a prior test could point
-  // its userId at a *different* user in this one — clear it to keep auth tests
-  // isolated. Guarded: the table is absent until 011_session.sql is applied
-  // (npm run test:setup), which shouldn't fail an unrelated run.
+  // Also clear the connect-pg-simple session store. resetDb() restarts the user
+  // ids (RESTART IDENTITY), so a session left over from an earlier test could
+  // point its userId at a different user in this one. The TRUNCATE is guarded
+  // because the table only exists after 011_session.sql is applied (npm run
+  // test:setup), and its absence shouldn't fail an unrelated run.
   await query('TRUNCATE session').catch((err: { code?: string }) => {
     if (err?.code !== '42P01') throw err; // 42P01 = undefined_table
   });
