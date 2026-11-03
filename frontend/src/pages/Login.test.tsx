@@ -12,8 +12,8 @@ vi.mock('../auth/useAuth', () => ({
   useAuth: () => ({ login: loginMock }),
 }));
 
-// Unit scope: the form's own logic. The post-success redirect is owned by
-// AnonymousOnly, not this component, so it is exercised in the integration test.
+// The redirect after login is done by AnonymousOnly, so
+// tests/integration/auth.test.tsx covers it.
 function renderLogin() {
   return render(
     <MemoryRouter initialEntries={['/login']}>

@@ -9,10 +9,6 @@ import { FollowButton } from '../components/FollowButton';
 import { useAsync } from '../hooks/useAsync';
 import styles from './FollowList.module.css';
 
-// docs/screens.md §10 — "Two lists sharing one screen". Public. Two routes render
-// this one component with a different `tab`, so the tab lives in the URL: each list
-// deep-links and Back/Forward move between them. Each row carries its own
-// followedByMe, so its follow button needs no second request.
 export function FollowList({ tab }: { tab: 'followers' | 'following' }) {
   const { username = '' } = useParams();
   const { user } = useAuth();
@@ -87,7 +83,7 @@ export function FollowList({ tab }: { tab: 'followers' | 'following' }) {
                       {row.bio && <p className={styles.rowBio}>{row.bio}</p>}
                     </div>
                   </div>
-                  {/* Can't follow yourself — hide the button on your own row. */}
+                  {/* You can't follow yourself, so your own row has no button. */}
                   {user?.username !== row.username && (
                     <FollowButton username={row.username} initialFollowing={row.followedByMe} />
                   )}

@@ -7,20 +7,11 @@ import { TextField } from '../components/TextField';
 import styles from './AuthForm.module.css';
 import { validateRegister, type RegisterErrors } from './authValidation';
 
-// docs/screens.md §1 — Register. Anonymous only (the route sits under
-// AnonymousOnly, which redirects an already-signed-in visitor to '/').
-//
-// This screen establishes the error-handling pattern every later form reuses:
-//
-//   1. Mirror the backend's field rules client-side for instant feedback
-//      (authValidation.validateRegister) and bail before any request if they fail.
-//   2. On a rejected request, an ApiError with a `field` (400 on a bad value, 409
-//      on a taken username/email) attaches its message to that input; an error
-//      without a field, or a non-ApiError transport failure, becomes the
-//      form-level banner.
-//
-// useAuth().register throws on failure by design (AuthProvider does not catch it),
-// which is what lets this handler read .field.
+// The backend's rules are checked client-side first (validateRegister), and
+// no request is sent if they fail. If the request fails, an ApiError with a
+// field (400 for a bad value, 409 for a taken username or email) is shown on
+// that input; any other error goes in the form-level banner. This works
+// because register() rethrows instead of catching.
 export function Register() {
   const { register } = useAuth();
 
@@ -44,12 +35,10 @@ export function Register() {
     setSubmitting(true);
     try {
       await register({ username: username.trim(), email: email.trim(), password });
-      // No navigate here: a successful register opens a session server-side and
-      // flips the provider to 'authenticated'; AnonymousOnly (which wraps this
-      // route) then redirects to '/'. This component unmounts with it.
+      // No navigate: AnonymousOnly does the redirect once the status changes.
     } catch (error) {
       if (isApiError(error) && error.field) {
-        // 400 (bad value) or 409 (taken) — field is one of username/email/password.
+        // 400 (bad value) or 409 (taken); field is username, email or password.
         setErrors({ [error.field]: error.message });
       } else if (isApiError(error)) {
         setFormError(error.message);

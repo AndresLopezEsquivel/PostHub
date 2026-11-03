@@ -6,10 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
 import { Register } from './Register';
 
-// Unit scope: the page's own logic — client validation gating the request, and
-// the ApiError.field -> field-error mapping. useAuth is mocked; the real network
-// path and the post-success redirect (owned by AnonymousOnly) are the integration
-// test's job.
+// useAuth is mocked, so this covers the page's own logic: validation stopping
+// the request, and showing ApiError.field on the right input. The network and
+// the redirect after registering are covered by
+// tests/integration/auth.test.tsx.
 
 const registerMock = vi.fn();
 

@@ -6,9 +6,6 @@ import { PostForm, type PostFormValues } from '../components/PostForm';
 import { useAsync } from '../hooks/useAsync';
 import styles from './PostForm.page.module.css';
 
-// docs/screens.md §6 — Create post. Authenticated only (route under RequireAuth).
-// Loads the category list for the checkboxes, then hands off to the shared PostForm;
-// on success it lands on the new post's detail.
 export function CreatePost() {
   const navigate = useNavigate();
   const categoriesState = useAsync((signal) => listCategories(signal), []);

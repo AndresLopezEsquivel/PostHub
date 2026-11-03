@@ -9,13 +9,9 @@ import { TextField } from '../components/TextField';
 import { useAsync } from '../hooks/useAsync';
 import styles from './EditProfile.module.css';
 
-// docs/screens.md §9 — Edit profile. Self only (RequireAuth). Fields: avatar, bio,
-// email, and an optional new password + confirm. Username is NOT offered — it's
-// immutable, and sending it is a 400 by design.
-//
-// Email is prefilled from the session (UserProfile carries no email); bio and avatar
-// from the profile. A successful save refreshes the session so a changed email stays
-// current.
+// Email is prefilled from the session, since UserProfile has no email; bio
+// and avatar come from the profile. A successful save refreshes the session
+// so a changed email stays current.
 export function EditProfile() {
   const { user } = useAuth();
   // RequireAuth guarantees a user; guard for the type.
@@ -108,8 +104,7 @@ function EditProfileForm({
 
     const body: UpdateProfileInput = { bio, email: email.trim() };
     if (password) body.password = password;
-    // Only send avatarKey when it changed: a key sets it, null clears it; unchanged is
-    // omitted so the stored avatar is preserved.
+    // Only send avatarKey when it changed: a key sets it and null removes it.
     if (avatarIntent.kind === 'set') body.avatarKey = avatarIntent.key;
     else if (avatarIntent.kind === 'removed') body.avatarKey = null;
 

@@ -1,5 +1,4 @@
-/* Shared centred-column shell for the plain card-list screens (Feed, Bookmarks),
-   which are just a heading over a PostCardList. Tokens only (see styles/tokens.css). */
+/* Shared by Feed and Bookmarks: a heading over a PostCardList. */
 
 .page {
   max-width: var(--container-width);
