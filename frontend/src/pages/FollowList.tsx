@@ -71,7 +71,7 @@ export function FollowList({ tab }: { tab: 'followers' | 'following' }) {
               {tab === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
             </p>
           ) : (
-            <ul className={styles.list}>
+            <ul role="list" className={styles.list}>
               {result.data.map((row) => (
                 <li key={row.username} className={styles.row}>
                   <div className={styles.rowLeft}>

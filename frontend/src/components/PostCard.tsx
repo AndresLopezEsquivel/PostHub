@@ -30,7 +30,7 @@ export function PostCard({
       <p className={styles.excerpt}>{post.excerpt}</p>
 
       {post.categories.length > 0 && (
-        <ul className={styles.tags}>
+        <ul role="list" className={styles.tags}>
           {post.categories.map((category) => (
             <li key={category.slug}>
               {/* Explore's filters live in the URL, so a category tag is just a link to

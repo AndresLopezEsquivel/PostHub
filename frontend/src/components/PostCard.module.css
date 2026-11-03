@@ -28,6 +28,10 @@
   color: var(--color-text-muted);
 }
 
+.meta > :first-child {
+  margin-right: var(--space-2);
+}
+
 .meta a {
   color: var(--color-text-muted);
   font-weight: 600;

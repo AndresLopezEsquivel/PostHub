@@ -90,7 +90,7 @@ export function Notifications() {
           {items.length === 0 ? (
             <p className={styles.notice}>No notifications yet.</p>
           ) : (
-            <ul className={styles.list}>
+            <ul role="list" className={styles.list}>
               {items.map((n) => (
                 <li key={n.id}>
                   <Link
