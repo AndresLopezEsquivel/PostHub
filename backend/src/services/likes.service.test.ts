@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-// Unit test: no database. The post lookup and like COUNT go through the mocked
-// queryOne; unlike's DELETE through query; the like insert + its notification run
-// inside a mocked withTransaction (a fake tx whose .query we assert on). These
-// handlers are thin, so end-to-end behaviour is proved in the integration suite —
-// here we pin the 404 guard, the notification firing/suppression policy, and shape.
+// Unit test with no database. The post lookup and the like count go through
+// the mocked queryOne, unlike's DELETE through query, and the like insert and
+// its notification through a fake tx from the mocked withTransaction.
+// End-to-end behavior is covered in tests/integration/likes.test.ts.
 vi.mock('../db/query', () => ({
   query: vi.fn(),
   queryOne: vi.fn(),

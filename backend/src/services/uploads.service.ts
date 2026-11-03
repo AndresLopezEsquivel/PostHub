@@ -4,12 +4,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../config/env';
 import { badRequest, serviceUnavailable } from '../errors/httpError';
 
-// Uploads: mints a presigned S3 PUT URL so the client uploads image bytes
-// straight to S3, then sends us only the returned key (imageKey/avatar_key).
-// Like the other services this holds no req/res/session. Presigning is a purely
-// local HMAC computation — no network call to AWS happens here — so this is
-// fully exercisable offline with throwaway credentials; only the client's later
-// PUT needs a real bucket.
+// Creates a presigned S3 PUT URL, so the browser uploads the image straight to
+// S3 and the API only receives the key. The signature is computed locally, so
+// tests can sign offline with throwaway keys.
 
 export interface PresignInput {
   contentType: unknown;
@@ -22,12 +19,12 @@ export interface PresignResult {
   expiresIn: number;
 }
 
-// purpose → key prefix. Segregating posts/ and avatars/ keeps a bucket policy or
-// lifecycle rule able to target one without the other.
+// Separate posts/ and avatars/ prefixes let a bucket policy or lifecycle rule
+// target one without the other.
 const PREFIXES: Record<string, string> = { post: 'posts', avatar: 'avatars' };
 
-// The image MIME allowlist → file extension. Only browser-uploadable image types;
-// anything else is rejected before a URL is ever signed.
+// Allowed image types and their file extensions. Anything else is rejected
+// before a URL is signed.
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -35,19 +32,16 @@ const EXTENSIONS: Record<string, string> = {
   'image/gif': 'gif',
 };
 
-// The minimum to sign: a bucket and a region. Credentials are intentionally NOT
-// required here — the deployed stack authenticates via an EC2 instance role, so the
-// AWS_* key pair is absent by design. When both are missing the feature is dormant
-// and the endpoint answers 503.
+// Needs only a bucket and a region. Credentials aren't required: on EC2 they
+// come from the instance role, so AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+// are unset there. If the bucket or region is missing, the endpoint returns 503.
 function isConfigured(): boolean {
   return Boolean(env.s3Bucket && env.awsRegion);
 }
 
-// Lazily memoized client, constructed after the config gate. Explicit credentials
-// are passed ONLY when both static keys are present (local/offline signing with
-// throwaway creds); otherwise the client is built with region alone and the SDK's
-// default credential provider chain resolves the EC2 instance role from instance
-// metadata.
+// Built on first use. Static keys are passed only when both are set (local
+// signing with throwaway keys). Otherwise the SDK's default credential chain
+// finds the EC2 instance role through instance metadata.
 let client: S3Client | null = null;
 function s3(): S3Client {
   if (!client) {
@@ -86,8 +80,8 @@ export async function createUploadUrl(input: PresignInput): Promise<PresignResul
   // Opaque, collision-free, prefix-segregated key. The client never chooses it.
   const key = `${prefix}/${randomUUID()}.${ext}`;
 
-  // Pinning ContentType into the signature means the client's later PUT must send
-  // the same Content-Type header, or S3 rejects the signature.
+  // Only the host header is signed, so S3 doesn't enforce this ContentType on
+  // the client's PUT.
   const command = new PutObjectCommand({
     Bucket: env.s3Bucket,
     Key: key,

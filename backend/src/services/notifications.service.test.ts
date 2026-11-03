@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: no database. The db/query helpers are mocked; assertRecipient, the
-// list, and the mark endpoints route through them. Exercises row→API mapping (the
-// null-post follow case), recipient ownership, the isRead validation, and that the
-// ?unread filter toggles the WHERE — no DB.
+// Unit test with no database. The db/query helpers are mocked. Covers the
+// row mapping (including a follow with no post), recipient ownership, isRead
+// validation and the ?unread filter.
 vi.mock('../db/query', () => ({
   query: vi.fn(),
   queryOne: vi.fn(),

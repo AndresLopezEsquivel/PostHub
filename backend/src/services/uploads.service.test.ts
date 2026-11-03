@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { vi } from 'vitest';
 
-// Unit test: no database, no real AWS. The config module is mocked with a mutable
-// object so each test controls whether uploads are "configured". The signer runs
-// for real — presigning is a purely local computation — with throwaway creds, so
-// we assert the URL's *structure* (the signature embeds a live X-Amz-Date, so no
-// exact string is possible).
+// Unit test with no database and no real AWS. env is mocked with a mutable
+// object, so each test decides whether uploads are configured. The signer
+// runs for real with throwaway keys. The signature includes the current
+// X-Amz-Date, so tests check the URL's structure, not an exact string.
 vi.mock('../config/env', () => ({
   env: {
     s3Bucket: '',
@@ -87,12 +86,10 @@ describe('createUploadUrl', () => {
     expect(filename.replace(/\.png$/, '')).toMatch(UUID);
   });
 
-  // Kept LAST on purpose: the S3 client is memoized on first use, so the signing
-  // tests above build (and cache) it with the throwaway static creds. This case then
-  // clears the static keys to prove the config gate no longer 503s on their absence —
-  // the deployed stack supplies credentials via an EC2 instance role instead. It only
-  // asserts the gate is passed (never a 503), not that signing completes; full
-  // role-based signing is verified in deployment.
+  // Must stay last: the S3 client is cached on first use, so the tests above
+  // build it with the throwaway static keys. This test clears the keys to show
+  // the config gate no longer returns 503 without them. It only checks the gate,
+  // not that signing completes, which needs a real EC2 instance role.
   it('passes the config gate with bucket+region only (instance-role path)', async () => {
     env.s3Bucket = 'posthub-uploads';
     env.awsRegion = 'us-east-1';

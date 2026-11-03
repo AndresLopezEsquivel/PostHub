@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { HttpError } from '../errors/httpError';
 
-// Unit test: no database. The db/query helpers are mocked; resolveUserId and the
-// profile/follow queries all route through the mocked query/queryOne. Exercises
-// mapping, profile-update validation, the email-conflict mapping, and the follow
-// toggle's self-follow guard — no DB.
+// Unit test with no database. The db/query helpers are mocked. Covers the
+// mapping, profile update validation, the email conflict mapping and the
+// self-follow guard.
 vi.mock('../db/query', () => ({
   query: vi.fn(),
   queryOne: vi.fn(),
@@ -47,7 +46,7 @@ describe('toProfile', () => {
     expect(toProfile(sampleProfileRow)).toEqual({
       username: 'andres',
       bio: 'Reading and building.',
-      avatarUrl: null, // avatarUrl null until step 9
+      avatarUrl: null, // no avatar_key, so no URL
       createdAt: '2026-01-08T09:14:00Z',
       postCount: 12,
       followerCount: 34,

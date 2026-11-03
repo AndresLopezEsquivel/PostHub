@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-// Unit test: no database. assertPostExists goes through the mocked queryOne, the
-// INSERT/DELETE through query. Thin handlers — the end-to-end behaviour (and the
-// GET /api/bookmarks listing) is proved in tests/integration/bookmarks.test.ts.
+// Unit test with no database. assertPostExists goes through the mocked
+// queryOne, and the INSERT and DELETE through query. The end-to-end behavior,
+// including GET /api/bookmarks, is in tests/integration/bookmarks.test.ts.
 vi.mock('../db/query', () => ({
   query: vi.fn(),
   queryOne: vi.fn(),

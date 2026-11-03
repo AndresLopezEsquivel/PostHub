@@ -8,14 +8,9 @@ import {
 } from './posts.service';
 import { insertNotification } from './notifications.service';
 
-// Comments data access + validation + row→API mapping. Like the other services it
-// holds no req/res/session: the session user is passed in as a plain `userId`.
-// The <comment> author is the same <user> as a post card's, so the author mapping
-// and avatar-URL construction are reused from posts.service (one source of truth).
+// A comment's author has the same shape as a post card's, so the author
+// mapping and avatar URL come from posts.service.
 
-// --- API shapes (camelCase, client-facing) -------------------------------
-
-// docs/api_design.md "Shared object shapes" — <comment>.
 export interface Comment {
   id: number;
   content: string;
@@ -31,10 +26,8 @@ export interface CommentList {
   total: number;
 }
 
-// --- The shared comment query -------------------------------------------
-
-// One SELECT feeds the list and the create/update responses, so the <comment>
-// shape has a single source of truth. The author is joined in.
+// One SELECT serves the list, create and update responses, so they all
+// return a comment in the same shape.
 const COMMENT_SELECT = `
   SELECT c.id, c.content, c.created_at, c.updated_at,
          u.username AS author_username, u.avatar_key AS author_avatar_key
@@ -42,8 +35,8 @@ const COMMENT_SELECT = `
   JOIN users u ON u.id = c.author_id
 `;
 
-// The row shape the SELECT returns (author joined) — distinct from types/db.ts
-// CommentRow, which mirrors the raw table.
+// What COMMENT_SELECT returns, with the author joined in. CommentRow in
+// types/db.ts is the raw table row.
 interface CommentJoinRow {
   id: number;
   content: string;
@@ -66,17 +59,13 @@ export function toComment(row: CommentJoinRow): Comment {
   };
 }
 
-// --- Validation ----------------------------------------------------------
-
-// The comments.content column is `text` (no length cap), so this mirrors posts'
-// validateContent: required and non-empty after trimming.
+// comments.content is text, with no length cap, so the only rule is that it
+// isn't empty after trimming. Same rule as validateContent in posts.service.
 function validateContent(value: unknown): string {
   const content = typeof value === 'string' ? value.trim() : '';
   if (!content) throw badRequest('Content is required', 'content');
   return content;
 }
-
-// --- Queries -------------------------------------------------------------
 
 async function fetchCommentRow(commentId: number): Promise<CommentJoinRow | null> {
   return queryOne<CommentJoinRow>(`${COMMENT_SELECT} WHERE c.id = $1`, [commentId]);
@@ -128,8 +117,8 @@ export async function createComment(
   authorId: number,
   input: CommentInput,
 ): Promise<Comment> {
-  // The post author is the notification recipient; this SELECT also serves as the
-  // existence check (null → 404), replacing a bare assertPostExists.
+  // This SELECT is both the existence check (404 if missing) and the lookup of
+  // the post author, who gets the notification.
   const post = await queryOne<{ author_id: number }>(
     'SELECT author_id FROM posts WHERE id = $1',
     [postId],
@@ -157,7 +146,7 @@ export async function createComment(
     return id;
   });
 
-  // Just inserted, so it exists — re-read through the shared select.
+  // The row was just inserted, so the assertion is safe.
   const row = await fetchCommentRow(newId);
   return toComment(row!);
 }

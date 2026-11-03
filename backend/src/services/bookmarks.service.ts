@@ -3,12 +3,9 @@ import { isForeignKeyViolation } from '../db/pgErrors';
 import { notFound } from '../errors/httpError';
 import { assertPostExists } from './posts.service';
 
-// Bookmarks: structurally identical to likes (idempotent PUT/DELETE toggle over a
-// composite-PK table), but private — so no count is returned, only the resulting
-// state (docs/api_design.md "Bookmarks"). Listing the session user's saved posts
-// lives in posts.service (listBookmarks), next to the shared card renderer.
-//
-// No req/res/session here; the session user arrives as a plain `userId`.
+// Bookmarks work like likes, but they are private, so no count is returned,
+// only the new state. Listing a user's saved posts is listBookmarks in
+// posts.service, next to the other post card listings.
 
 export interface BookmarkState {
   postId: number;
@@ -24,7 +21,7 @@ export async function bookmarkPost(userId: number, postId: number): Promise<Book
       [userId, postId],
     );
   } catch (err) {
-    // Post deleted between the existence check and the insert → 404, not a 500.
+    // The post was deleted between the check and the insert: 404, not 500.
     if (isForeignKeyViolation(err)) throw notFound('Post not found');
     throw err;
   }
