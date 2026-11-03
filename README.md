@@ -41,6 +41,28 @@ Conversely, when users upload images, their browsers send the files directly to 
 
 To avoid using long-term static AWS credentials in the backend, we use an instance profile to attach an IAM role to the EC2 instance running the API. The role's trust policy allows the Amazon EC2 service to assume the role, so AWS Security Token Service (STS) can issue temporary credentials. EC2 makes these credentials available through the Instance Metadata Service (IMDS), where the AWS SDK running in the backend can retrieve them and use them to generate the presigned URLs. The role's inline policy grants only `s3:PutObject` permission, so the credentials cannot be used to read or list objects in the bucket.
 
+## Screenshots
+
+<figure>
+  <img src="./docs/screenshots/explore.png" alt="Explore page listing posts">
+  <figcaption><small>Explore: every post, with category and sort filters</small></figcaption>
+</figure>
+
+<figure>
+  <img src="./docs/screenshots/post-detail.png" alt="A post with its comments">
+  <figcaption><small>Post detail: likes, bookmarks, author controls and comments</small></figcaption>
+</figure>
+
+<figure>
+  <img src="./docs/screenshots/notifications.png" alt="Notifications list">
+  <figcaption><small>Notifications: likes, comments and new followers</small></figcaption>
+</figure>
+
+<figure>
+  <img src="./docs/screenshots/profile.png" alt="A user profile">
+  <figcaption><small>Profile: bio, follower counts and the user's posts</small></figcaption>
+</figure>
+
 ## Getting started (development)
 
 Docker is the only prerequisite: there is no host Node or npm. No `.env` file is
