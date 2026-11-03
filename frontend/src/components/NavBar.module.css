@@ -1,9 +1,3 @@
-/* The scaffold's only component stylesheet. CSS Modules scope these class names
-   at build time, so `.bar` here cannot collide with a `.bar` anywhere else — the
-   same locality principle as the backend keeping each service's types beside the
-   code that owns them. Every value comes from styles/tokens.css; components never
-   hardcode a colour or a spacing step. */
-
 .bar {
   display: flex;
   align-items: center;
@@ -43,7 +37,6 @@
   font-weight: 600;
 }
 
-/* The unread badge, tucked against the Notifications link. */
 .badge {
   display: inline-block;
   margin-left: var(--space-1);

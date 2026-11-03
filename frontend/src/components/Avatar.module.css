@@ -1,5 +1,3 @@
-/* Avatar — a round image or an initial-in-a-circle fallback. Tokens only. */
-
 .avatar {
   display: inline-flex;
   align-items: center;

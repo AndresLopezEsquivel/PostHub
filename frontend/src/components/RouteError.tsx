@@ -1,13 +1,8 @@
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
 
-// docs/screens.md, "Error boundary": the fallback shown when a screen fails
-// unexpectedly, so the rest of the application stays usable. Wired as the root
-// route's errorElement.
-//
-// What it does NOT catch: errors thrown from event handlers or effects. React
-// error boundaries never have. That is why "error" is a documented state on the
-// individual screens — a failed fetch is the screen's own problem to render, and
-// this surface only catches the crashes nobody anticipated.
+// The root route's errorElement: shown when a screen throws while rendering
+// or in an effect. Errors in event handlers and async code aren't caught, so a
+// failed fetch is shown by the screen itself.
 export function RouteError() {
   const error = useRouteError();
 

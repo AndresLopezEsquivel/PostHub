@@ -1,5 +1,3 @@
-/* ImageUploadField — file input, preview, and inline states. Tokens only. */
-
 .field {
   display: flex;
   flex-direction: column;

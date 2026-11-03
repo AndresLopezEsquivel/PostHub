@@ -4,12 +4,11 @@ import { isApiError } from '../api/client';
 import { type Purpose, uploadImage } from '../api/uploads';
 import styles from './ImageUploadField.module.css';
 
-// The shared image picker for both forms (post image, profile avatar). It owns the
-// whole upload lifecycle and uploads ON SELECT (immediate), so by submit time the
-// parent already holds the object key. It reports its result up as a KeyIntent so the
-// parent can distinguish the three cases a PATCH must handle: leave the field alone
-// (omit → preserve the stored key), set a new key, or clear it. While an upload is in
-// flight it reports pending so the parent can disable submit.
+// The image picker for the post form and Edit profile. It uploads as soon as a
+// file is picked, so the parent already has the key at submit time. It
+// reports a KeyIntent so the parent can tell the three PATCH cases apart:
+// unchanged (omit the field and keep the stored key), a new key, or removed.
+// While uploading it reports pending so the parent can disable submit.
 
 export type KeyIntent =
   | { kind: 'unchanged' }

@@ -10,8 +10,8 @@ export interface PostFormValues {
   title: string;
   content: string;
   categoryIds: number[];
-  // Present only when the image changed: a key sets/replaces it, null clears it. Absent
-  // (unchanged) so the caller can omit it from a PATCH and preserve the stored image.
+  // Only present when the image changed: a key sets it and null removes it.
+  // Left out when unchanged, so a PATCH keeps the stored image.
   imageKey?: string | null;
 }
 
@@ -24,11 +24,11 @@ function isFieldKey(field: string): field is (typeof FIELD_KEYS)[number] {
   return (FIELD_KEYS as readonly string[]).includes(field);
 }
 
-// The create/edit form body, shared by CreatePost and EditPost — the same "one form
-// component, two callers" split the auth forms use. It owns field state, client
-// validation (mirroring the backend), and the ApiError.field -> field mapping
-// (pass 1's pattern); the caller owns loading the data and what happens after a
-// successful submit. Extra actions (Edit's Delete) come in as children.
+// The create and edit form, shared by CreatePost and EditPost. It owns the
+// field state, client-side validation that mirrors the backend, and showing
+// an ApiError's field next to its input. The caller loads the data and
+// decides what happens after submit. Extra actions, like EditPost's Delete,
+// are passed as children.
 export function PostForm({
   categories,
   initial,
@@ -86,8 +86,6 @@ export function PostForm({
       content: content.trim(),
       categoryIds: [...selected],
     };
-    // Only carry imageKey when it actually changed: a new key, or null to clear.
-    // 'unchanged' leaves the property absent so a PATCH preserves the stored image.
     if (imageIntent.kind === 'set') values.imageKey = imageIntent.key;
     else if (imageIntent.kind === 'removed') values.imageKey = null;
 
